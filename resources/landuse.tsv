@@ -1,0 +1,31 @@
+# blockfill-catalog-version=2
+# Chinese class	2023 CN land-use code	preview color	OSM tags (only for unambiguous suggestions)
+城镇住宅用地	0701	#E8C547	landuse=residential
+商业用地（综合商业）	0901	#ED7777	landuse=commercial
+零售商业用地	090101	#E98675	landuse=retail
+商务金融用地	0902	#CB6D9F	landuse=commercial
+工业用地	1001	#AA8BC5	landuse=industrial
+物流仓储用地	1101	#A78F7C	landuse=industrial
+公园绿地	1401	#77B86A	leisure=park
+机关团体用地	0801	#E88C68	amenity=townhall
+科研用地	0802	#A894C7	
+文化用地（可再细分 080301/080302）	0803	#CA9DCC	
+教育用地（学校）	0804	#E6A576	amenity=school
+体育用地（运动场馆）	0805	#82BDB9	leisure=sports_centre
+医疗卫生用地（医院）	0806	#E67F9B	amenity=hospital
+社会福利用地	0807	#D69FAA	amenity=social_facility
+城镇社区服务设施用地	0702	#D7BD78	amenity=community_centre
+农村宅基地	0703	#D6AD6B	landuse=residential
+农村社区服务设施用地	0704	#D5B494	
+娱乐康体用地	0903	#BC8AC5	leisure=adult_gaming_centre
+其他商业服务业用地	0904	#D7888A	
+采矿用地	1002	#927DAA	landuse=industrial
+盐田	1003	#C8ABC7	
+储备库用地	1102	#A89076	
+交通运输用地（需选具体子类）	12	#ADB3C0	
+公用设施用地（需选具体子类）	13	#94A6BD	
+防护绿地	1402	#6C9F76	
+广场用地	1403	#B9CB93	
+特殊用地（需核实分类）	15	#C3A1A6	
+留白用地	16	#BCC4D0	
+陆地水域（需选具体子类）	17	#8FBBC3	
