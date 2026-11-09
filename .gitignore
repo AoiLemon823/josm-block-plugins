@@ -1,0 +1,27 @@
+# Build artifacts
+build/
+build-layout/
+dist/
+
+# JDK tools (bundled)
+tools/
+
+# JOSM (downloaded)
+josm-custom.jar
+
+# IDE
+.idea/
+.vscode/
+*.iml
+
+# OS
+Thumbs.db
+.DS_Store
+
+# Logs
+*.log
+research-*-error.log
+
+# Temp
+*.tmp
+*.bak
