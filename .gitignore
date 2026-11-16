@@ -1,7 +1,7 @@
 # Build artifacts
 build/
 build-layout/
-dist/
+# dist/
 
 # JDK tools (bundled)
 tools/

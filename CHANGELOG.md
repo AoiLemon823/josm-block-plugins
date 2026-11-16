@@ -9,7 +9,10 @@ All notable changes to the JOSM BlockFill and BlockLayout plugins.
 - Optional highway-intersection corner chamfer: toggle plus configurable cut distance.
   Only convex block corners on a highway junction are cut; reflex and nearly straight corners are left alone.
 - Chamfer distance is measured on the generated (inset) block boundary and is clamped to the adjacent road length.
-- Corner geometry references [Columbina](https://github.com/Daredemodaisuki/Columbina) (`chamfer/ChamferGenerator`); its intent system is not used.
+- Corner geometry references [Columbina](https://github.com/Daredemodaisuki/Columbina) (`chamfer/ChamferGenerator`).
+- Both plugin panels now collapse/expand from the JOSM title bar (the content is mounted with `ToggleDialog.createLayout`, which registers the title-bar handler); dock and minimized state are stored per plugin.
+- BlockFill replaces the long help paragraph with per-parameter tooltips; the mode shortcut is shown in JOSM's main status bar, and the panel button toggles the fill mode using the shortcut resolved by JOSM.
+- Deleting the last layer (closing the map view) no longer throws: plugin cleanup releases modes and listeners instead of removing dialogs from the already destroyed map frame.
 
 ## [1.0.0] — 2026-11-09
 

@@ -54,6 +54,12 @@ public final class BlockLayoutPanel extends ToggleDialog {
 
     public BlockLayoutPanel() {
         super("建筑排布","edit","在选中的闭合地块内预览住宅楼、底商和厂房布局",null,360);
+        // ToggleDialog keys visibility and collapse state by icon name; use a plugin-specific prefix
+        // so several plugin panels do not share (and corrupt) each other's dock/minimized state.
+        preferencePrefix="blocklayout";
+        isShowing=Config.getPref().getBoolean(preferencePrefix+".visible",false);
+        isDocked=Config.getPref().getBoolean(preferencePrefix+".docked",true);
+        isCollapsed=Config.getPref().getBoolean(preferencePrefix+".minimized",false);
         JPanel housing=new JPanel(new GridBagLayout());housing.setBorder(BorderFactory.createEmptyBorder(8,8,8,8));
         int row=0;addRow(housing,row++,"住宅预设",preset);addRow(housing,row++,"建筑短边宽度（米）",width);addRow(housing,row++,"建筑长边长度（米）",length);addRow(housing,row++,"建筑高度（米）",height);
         addRow(housing,row++,"建筑端部退距（米）",endSetback);addRow(housing,row++,"同排楼栋侧向净距（米）",sideClearance);addRow(housing,row++,"最小排间距（米）",rowSpacing);addRow(housing,row++,"日照距离系数",sunFactor);addRow(housing,row++,"生成标签",buildingTag);
@@ -72,8 +78,10 @@ public final class BlockLayoutPanel extends ToggleDialog {
         JTextArea note=new JTextArea("住宅三类预设和自定义分别记忆修改值。厂房联排按同尺寸矩形组生成，彼此保留同排间隔；0关闭，1仅单栋，2以上随机选择组内栋数。组团优先使用长边范围上段。改变随机种子可更换布局。拾取地块边可确定排列方向。\n\n左键确认一次生成，Ctrl+Z一次撤销；建筑需完整位于地块内。厂房尺寸范围是概化外轮廓，不等同于结构轴线模数，也不是消防或规划合规审查。");
         note.setLineWrap(true);note.setWrapStyleWord(true);note.setEditable(false);note.setOpaque(false);
         JPanel content=scrollContentPanel();content.add(tabs,BorderLayout.NORTH);content.add(direction,BorderLayout.CENTER);content.add(note,BorderLayout.SOUTH);
-        JScrollPane scroll=new JScrollPane(content,JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED,JScrollPane.HORIZONTAL_SCROLLBAR_NEVER);scroll.setBorder(BorderFactory.createEmptyBorder());scroll.setViewportBorder(BorderFactory.createEmptyBorder(0,0,0,3));scroll.getVerticalScrollBar().setUnitIncrement(18);add(scroll,BorderLayout.CENTER);
-        JPanel footer=new JPanel(new BorderLayout(4,4));footer.setBorder(BorderFactory.createEmptyBorder(3,4,3,4));footer.add(status,BorderLayout.CENTER);add(footer,BorderLayout.SOUTH);
+        JScrollPane scroll=new JScrollPane(content,JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED,JScrollPane.HORIZONTAL_SCROLLBAR_NEVER);scroll.setBorder(BorderFactory.createEmptyBorder());scroll.setViewportBorder(BorderFactory.createEmptyBorder(0,0,0,3));scroll.getVerticalScrollBar().setUnitIncrement(18);
+        JPanel footer=new JPanel(new BorderLayout(4,4));footer.setBorder(BorderFactory.createEmptyBorder(3,4,3,4));footer.add(status,BorderLayout.CENTER);
+        JPanel body=new JPanel(new BorderLayout());body.add(scroll,BorderLayout.CENTER);body.add(footer,BorderLayout.SOUTH);
+        createLayout(body,false,null);
         ChangeListener changed=e->{if(!loading)settingsChanged();};
         for(JSpinner spinner:new JSpinner[]{width,length,height,endSetback,sideClearance,rowSpacing,sunFactor,shopSetback,shopDepth,shopHeight,shopRoadClearance,factoryRoadWidth,factoryRoadClearance,factoryMinWidth,factoryMaxWidth,factoryMinLength,factoryMaxLength,factoryFloorHeight,factoryMinLevels,factoryMaxLevels,factorySetback,factoryGap,factoryRowGap,factorySeed,factoryGroupSize}){
             spinner.addChangeListener(changed);

@@ -51,23 +51,23 @@ public final class BlockFillPlugin extends Plugin {
 
     void showPanel() {
         if (panel == null) throw new IllegalStateException("JOSM 地图界面尚未初始化，请先打开地图数据。");
-        panel.showDialog();
+        panel.unfurlDialog();
         if (mode != null && MainApplication.getMap() != null) MainApplication.getMap().selectMapMode(mode);
     }
 
     @Override
     public void mapFrameInitialized(MapFrame oldFrame, MapFrame newFrame) {
         if (oldFrame != null && oldFrame != newFrame) {
-            if (panel != null) oldFrame.removeToggleDialog(panel);
-            if (mode != null) {
-                if (button != null) oldFrame.allMapModeButtons.remove(button);
-                mode.exitMode();
-            }
+            // JOSM destroys the old map frame (dialogs, toolbars and modes) before notifying plugins,
+            // so removing its dialogs/buttons or calling exitMode() would throw; only release our state.
+            if (mode != null) mode.dispose();
             panel = null; mode = null; button = null;
         }
         if (newFrame == null) return;
         try {
             panel = new BlockFillPanel(); mode = new BlockFillMode(panel); panel.attach(mode);
+            // Keep the Tools menu accelerator in sync with JOSM's (possibly reassigned) mode shortcut.
+            if (mode.getShortcut() != null) openAction.putValue(javax.swing.Action.ACCELERATOR_KEY, mode.getShortcut().getKeyStroke());
             newFrame.addToggleDialog(panel);
             button = new IconToggleButton(mode); newFrame.addMapMode(button);
         } catch (RuntimeException ex) {

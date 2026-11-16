@@ -11,8 +11,7 @@ public final class BlockFillOpenAction extends AbstractAction {
     BlockFillOpenAction(BlockFillPlugin plugin) {
         super("街区填充…", BlockFillIcons.icon());
         this.plugin=plugin;
-        putValue(SHORT_DESCRIPTION,"打开街区填充面板（Alt+Shift+L 激活填充工具）");
-        putValue(ACCELERATOR_KEY,KeyStroke.getKeyStroke("alt shift L"));
+        putValue(SHORT_DESCRIPTION,"打开街区填充面板并激活填充工具");
     }
     @Override public void actionPerformed(ActionEvent event) {
         try { plugin.showPanel(); }

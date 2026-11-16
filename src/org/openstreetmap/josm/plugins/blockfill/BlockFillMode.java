@@ -53,18 +53,24 @@ public final class BlockFillMode extends MapMode implements MapViewPaintable {
     }
     @Override public boolean layerIsSupported(Layer layer){return layer instanceof OsmDataLayer;}
     @Override public void enterMode() {
-        super.enterMode();active=true;
+        super.enterMode();active=true;panel.modeActiveChanged(true);
         MainApplication.getMap().mapView.addMouseListener(this);MainApplication.getMap().mapView.addMouseMotionListener(this);MainApplication.getMap().mapView.addTemporaryLayer(this);
         KeyboardFocusManager.getCurrentKeyboardFocusManager().addKeyEventDispatcher(keys);
-        panel.showDialog();bindData();invalidateGeometry();
+        panel.unfurlDialog();bindData();invalidateGeometry();
     }
     @Override public void exitMode() {
+        panel.modeActiveChanged(false);
+        dispose();
+        if(MainApplication.getMap()!=null){MainApplication.getMap().mapView.removeMouseListener(this);MainApplication.getMap().mapView.removeMouseMotionListener(this);MainApplication.getMap().mapView.removeTemporaryLayer(this);}
+        panel.message("点击“进入街区填充模式”以启用街区填充功能");
+        super.exitMode();
+    }
+    /** Releases listeners without touching MainApplication.getMap() or the panel, both of which are already gone when JOSM destroys the map frame. */
+    void dispose(){
         active=false;previewTimer.stop();revision++;
         if(worker!=null)worker.cancel(true);
-        if(MainApplication.getMap()!=null){MainApplication.getMap().mapView.removeMouseListener(this);MainApplication.getMap().mapView.removeMouseMotionListener(this);MainApplication.getMap().mapView.removeTemporaryLayer(this);}
         KeyboardFocusManager.getCurrentKeyboardFocusManager().removeKeyEventDispatcher(keys);
         if(data!=null)data.removeDataSetListener(listener);data=null;geometry=null;candidate=null;sourceFace=null;
-        super.exitMode();
     }
     private void bindData(){
         DataSet now=MainApplication.getLayerManager().getEditDataSet();
@@ -79,7 +85,7 @@ public final class BlockFillMode extends MapMode implements MapViewPaintable {
     void refreshPreview(){if(active){previewTimer.restart();repaint();}}
     @Override public void mouseMoved(MouseEvent e){mouse=e.getPoint();previewTimer.restart();}
     @Override public void mouseDragged(MouseEvent e){candidate=null;sourceFace=null;repaint();}
-    @Override public void mouseExited(MouseEvent e){mouse=null;candidate=null;sourceFace=null;repaint();}
+    @Override public void mouseExited(MouseEvent e){mouse=null;candidate=null;sourceFace=null;showIdleStatus();repaint();}
     @Override public void mousePressed(MouseEvent e){
         if(e.getButton()!=MouseEvent.BUTTON1 || e.isControlDown()||e.isAltDown()||e.isShiftDown())return;
         mouse=e.getPoint();previewTimer.stop();updatePreview();
@@ -99,13 +105,17 @@ public final class BlockFillMode extends MapMode implements MapViewPaintable {
         bindData();candidate=null;sourceFace=null;
         if(data==null){panel.message("请先创建或打开可编辑的 OSM 数据图层。");repaint();return;}
         if(geometry==null||geometryData!=data){if(buildError!=null){panel.message(buildError);return;}if(worker==null||worker.isDone())build();return;}
-        if(mouse==null){panel.message("道路 "+geometry.edgeCount+" 段 / 街区 "+geometry.faces().size()+" 块；移入街区预览");repaint();return;}
+        if(mouse==null){showIdleStatus();repaint();return;}
         LatLon ll=MainApplication.getMap().mapView.getLatLon(mouse.x,mouse.y);
         BlockGeometry.Point p=meters.project(ll);
         candidate=geometry.at(p.x(),p.y(),panel.insetMeters(),panel.chamferMeters());
         for(BlockGeometry.Face face:geometry.faces())if(face.path().contains(p.x(),p.y())){sourceFace=face;break;}
-        if(candidate.valid())panel.message(String.format(Locale.ROOT,"%s · %.0f m² · 点击生成",panel.entry().name(),candidate.area()));
+        if(candidate.valid())panel.message(String.format(Locale.ROOT,"%s，面积 %.0f m² · 左键以确认地块",panel.entry().name(),candidate.area()));
         else panel.message(candidate.error());repaint();
+    }
+    private void showIdleStatus(){
+        if(geometry==null)panel.message("正在读取当前视口道路…");
+        else panel.message("当前读入道路 "+geometry.edgeCount+" 段，可构建街区 "+geometry.faces().size()+" 块 · 鼠标移入绘图区以预览并填充地块");
     }
     private void build(){
         if(data==null)return;
@@ -219,5 +229,5 @@ public final class BlockFillMode extends MapMode implements MapViewPaintable {
         }finally{g.dispose();}
     }
     private Path2D.Double screen(List<BlockGeometry.Point> points,MapView mv){Path2D.Double p=new Path2D.Double();for(int i=0;i<points.size();i++){Point pixel=mv.getPoint(meters.inverse(points.get(i)));if(i==0)p.moveTo(pixel.x,pixel.y);else p.lineTo(pixel.x,pixel.y);}p.closePath();return p;}
-    @Override public String getModeHelpText(){return "街区填充：悬停预览、点击生成，1—9 切换用地，Esc 退出；Ctrl+Z 撤销。";}
+    @Override public String getModeHelpText(){return "街区填充：鼠标悬停预览地块，左键确认地块，Ctrl+Z 撤销。数字键 1—9 切换用地，Esc 退出工具。";}
 }

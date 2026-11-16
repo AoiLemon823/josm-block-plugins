@@ -84,15 +84,20 @@ public final class BlockLayoutMode extends MapMode implements MapViewPaintable {
     }
 
     @Override public void exitMode() {
-        active=false; ready=false; preview=null;footprintPreview=List.of();shopPreview=List.of();roadPreview=List.of();factoryPreview=List.of();factoryPreviewLevels=List.of();treePreview=List.of(); projection=null;previewParcelIds=java.util.Set.of();previewGeometry=Map.of();
-        if(data!=null){data.removeDataSetListener(dataListener);data=null;}
-        KeyboardFocusManager.getCurrentKeyboardFocusManager().removeKeyEventDispatcher(keyDispatcher);
+        dispose();
         if (MainApplication.getMap()!=null) {
             MainApplication.getMap().mapView.removeMouseListener(this);
             MainApplication.getMap().mapView.removeMouseMotionListener(this);
             MainApplication.getMap().mapView.removeTemporaryLayer(this);
         }
         super.exitMode();
+    }
+
+    /** Releases listeners without touching MainApplication.getMap(), which is already null while JOSM destroys the map frame. */
+    void dispose() {
+        active=false; ready=false; preview=null;footprintPreview=List.of();shopPreview=List.of();roadPreview=List.of();factoryPreview=List.of();factoryPreviewLevels=List.of();treePreview=List.of(); projection=null;previewParcelIds=java.util.Set.of();previewGeometry=Map.of();
+        if(data!=null){data.removeDataSetListener(dataListener);data=null;}
+        KeyboardFocusManager.getCurrentKeyboardFocusManager().removeKeyEventDispatcher(keyDispatcher);
     }
 
     void startPreview() {
