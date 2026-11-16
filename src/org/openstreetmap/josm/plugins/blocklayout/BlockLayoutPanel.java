@@ -1,22 +1,31 @@
 package org.openstreetmap.josm.plugins.blocklayout;
 
+import java.awt.AWTEvent;
 import java.awt.BorderLayout;
+import java.awt.Component;
 import java.awt.GridBagConstraints;
 import java.awt.GridBagLayout;
 import java.awt.Insets;
+import java.awt.KeyboardFocusManager;
+import java.awt.Toolkit;
+import java.awt.event.AWTEventListener;
+import java.awt.event.KeyEvent;
 import java.awt.event.MouseWheelEvent;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import javax.swing.BorderFactory;
 import javax.swing.JButton;
 import javax.swing.JComboBox;
+import javax.swing.JComponent;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
 import javax.swing.JCheckBox;
 import javax.swing.JSpinner;
 import javax.swing.JScrollPane;
 import javax.swing.JTextArea;
+import javax.swing.KeyStroke;
 import javax.swing.SpinnerNumberModel;
+import javax.swing.SwingUtilities;
 import javax.swing.event.ChangeListener;
 import org.openstreetmap.josm.gui.dialogs.ToggleDialog;
 import org.openstreetmap.josm.spi.preferences.Config;
@@ -51,6 +60,7 @@ public final class BlockLayoutPanel extends ToggleDialog {
     private boolean loading;
     private boolean devMode=java.lang.Boolean.getBoolean("blocklayout.dev");
     private String activePreset="自定义 / 上次参数";
+    private final AWTEventListener shortcutShield=this::shieldShortcuts;
 
     public BlockLayoutPanel() {
         super("建筑排布","edit","在选中的闭合地块内预览住宅楼、底商和厂房布局",null,360);
@@ -100,7 +110,24 @@ public final class BlockLayoutPanel extends ToggleDialog {
         treeDoubleSide.addActionListener(e->settingsChanged());
         pickEdge.addActionListener(e->{if(mode!=null)mode.beginDirectionPick();});resetEdge.addActionListener(e->{if(mode!=null)mode.resetDirection();});
         loadLastSettings();
+        Toolkit.getDefaultToolkit().addAWTEventListener(shortcutShield,AWTEvent.KEY_EVENT_MASK);
     }
+
+    /**
+     * JOSM global shortcuts live on the main window, so typing into a docked text field can trigger map
+     * modes. While focus is inside this panel's text fields, keep bindings owned by the focus owner and
+     * consume the rest.
+     */
+    private void shieldShortcuts(AWTEvent event){
+        if(event.getID()!=KeyEvent.KEY_PRESSED)return;
+        KeyEvent key=(KeyEvent)event;
+        Component focus=KeyboardFocusManager.getCurrentKeyboardFocusManager().getFocusOwner();
+        if(!(focus instanceof javax.swing.text.JTextComponent target)||!SwingUtilities.isDescendingFrom(target,this))return;
+        if(key.getKeyCode()==KeyEvent.VK_TAB)return;
+        if(target.getInputMap(JComponent.WHEN_FOCUSED).get(KeyStroke.getKeyStrokeForEvent(key))!=null)return;
+        key.consume();
+    }
+    @Override public void destroy(){Toolkit.getDefaultToolkit().removeAWTEventListener(shortcutShield);super.destroy();}
 
     private static Map<String,LayoutSettings> presets(){
         Map<String,LayoutSettings> m=new LinkedHashMap<>();

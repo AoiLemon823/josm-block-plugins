@@ -6,13 +6,17 @@ All notable changes to the JOSM BlockFill and BlockLayout plugins.
 
 ### BlockFill (街区填充) 1.0.1
 
-- Optional highway-intersection corner chamfer: toggle plus configurable cut distance.
-  Only convex block corners on a highway junction are cut; reflex and nearly straight corners are left alone.
-- Chamfer distance is measured on the generated (inset) block boundary and is clamped to the adjacent road length.
-- Corner geometry references [Columbina](https://github.com/Daredemodaisuki/Columbina) (`chamfer/ChamferGenerator`).
-- Both plugin panels now collapse/expand from the JOSM title bar (the content is mounted with `ToggleDialog.createLayout`, which registers the title-bar handler); dock and minimized state are stored per plugin.
-- BlockFill replaces the long help paragraph with per-parameter tooltips; the mode shortcut is shown in JOSM's main status bar, and the panel button toggles the fill mode using the shortcut resolved by JOSM.
-- Deleting the last layer (closing the map view) no longer throws: plugin cleanup releases modes and listeners instead of removing dialogs from the already destroyed map frame.
+#### Bug fixes
+  - Deleting the last layer no longer raises an error: plugin cleanup releases modes and listeners instead of removing dialogs from the already destroyed map frame.
+  - The panel mode button now shows the shortcut actually assigned by JOSM, including reassigned shortcuts.
+  - Typing in text fields or spinner editors no longer triggers JOSM global shortcuts (for example "a" entering draw mode); key presses without a local text binding are consumed while focus stays inside the panel.
+
+#### New features
+  - Optional highway-intersection corner chamfer with a configurable cut distance; only convex corners at highway junctions are cut, and the distance is clamped to the adjacent road length. Corner geometry references [Columbina](https://github.com/Daredemodaisuki/Columbina) (`chamfer/ChamferGenerator`).
+
+#### UI and UX improvements
+  - Improved wording, tooltips, wrapped status messages and panel layout (including title-bar collapsing) for a cleaner interface.
+  - Fictional names are filled in automatically for the next parcel: candidates refresh automatically and the first one is used by default, and editing the name box applies immediately without a separate confirmation step.
 
 ## [1.0.0] — 2026-11-09
 

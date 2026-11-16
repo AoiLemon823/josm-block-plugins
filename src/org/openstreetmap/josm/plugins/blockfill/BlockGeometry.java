@@ -116,7 +116,7 @@ public final class BlockGeometry {
         Face chosen = null;
         for (Face f : faces) if (f.path().contains(x, y)) { chosen = f; break; }
         if (chosen == null) {
-            for(Face f:faces)for(int i=0;i<f.vertices().size();i++){Vertex a=f.vertices().get(i),b=f.vertices().get((i+1)%f.vertices().size());if(java.awt.geom.Line2D.ptSegDist(a.x(),a.y(),b.x(),b.y(),x,y)<0.02)return Candidate.fail("鼠标位于道路边界上；请移入街区内部。");}
+            for(Face f:faces)for(int i=0;i<f.vertices().size();i++){Vertex a=f.vertices().get(i),b=f.vertices().get((i+1)%f.vertices().size());if(java.awt.geom.Line2D.ptSegDist(a.x(),a.y(),b.x(),b.y(),x,y)<0.02)return Candidate.fail("鼠标位于道路边界上；请移入地块内部。");}
             return Candidate.fail("此处没有可用的道路闭合街区；检查断口、共享节点、图层或道路筛选。");
         }
         if(chosen!=null)for(Face other:faces)if(other!=chosen&&Math.abs(other.area()-chosen.area())<Math.max(0.01,chosen.area()*1e-9)) {
@@ -126,7 +126,7 @@ public final class BlockGeometry {
             if (f.area() >= chosen.area()) continue;
             boolean strictlyInside = true;
             for (Vertex v : f.vertices()) if (!chosen.path().contains(v.x(), v.y())) { strictlyInside = false; break; }
-            if (strictlyInside) return Candidate.fail("街区包含独立内环，第一版不生成带孔地块；请分割或调整道路筛选。");
+            if (strictlyInside) return Candidate.fail("街区包含独立内环，当前版本不支持生成带孔地块；请分割或调整道路筛选。");
         }
         for (Face f : faces) {
             if (f == chosen || f.area() <= chosen.area()) continue;

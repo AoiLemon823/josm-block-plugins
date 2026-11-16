@@ -358,7 +358,7 @@ public final class BlockLayoutMode extends MapMode implements MapViewPaintable {
     private static final class LocalProjection {
         private static final double R=6371008.8;
         private final double lat0,lon0,cos;
-        LocalProjection(LatLon origin){lat0=origin.lat();lon0=origin.lon();cos=Math.cos(Math.toRadians(lat0));if(Math.abs(cos)<0.01)throw new IllegalArgumentException("第一版不支持极地区域。");}
+        LocalProjection(LatLon origin){lat0=origin.lat();lon0=origin.lon();cos=Math.cos(Math.toRadians(lat0));if(Math.abs(cos)<0.01)throw new IllegalArgumentException("当前版本不支持极地区域。");}
         LayoutGeometry.Point project(LatLon ll){return new LayoutGeometry.Point(R*Math.toRadians(ll.lon()-lon0)*cos,R*Math.toRadians(ll.lat()-lat0));}
         LatLon inverse(LayoutGeometry.Point p){return new LatLon(lat0+Math.toDegrees(p.y()/R),lon0+Math.toDegrees(p.x()/(R*cos)));}
     }
