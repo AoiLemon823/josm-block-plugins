@@ -32,6 +32,9 @@ public final class UiStartupTest {
             panel.attach(mode);
             if (mode.getValue(javax.swing.Action.SMALL_ICON) == null) throw new AssertionError("Map mode has no icon");
             if (mode.getShortcut() == null) throw new AssertionError("Map mode has no shortcut");
+            if(panel.chamferEnabled.isSelected())throw new AssertionError("Intersection chamfer must be opt-in");
+            panel.chamfer.setValue(8.0);panel.chamferEnabled.doClick();
+            if(panel.chamferMeters()!=8.0)throw new AssertionError("Chamfer distance setting must be applied");
             NamingPanel naming=panel.naming;
             if(naming.active())throw new AssertionError("Fictional naming must be opt-in for real-map users");
             naming.enabled.doClick();naming.city.setText("榆川市");naming.district.setText("静海区");naming.road.setText("百叶路");

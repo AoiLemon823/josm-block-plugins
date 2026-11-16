@@ -11,6 +11,8 @@ public final class BlockFillPanel extends ToggleDialog {
     final JComboBox<LanduseCatalog.Entry> category;
     final JComboBox<String> output = new JComboBox<>(new String[]{"OSM 常用标签（推荐）", "本地研究（保存中国分类）"});
     final JSpinner inset = new JSpinner(new SpinnerNumberModel(5.0, 0.0, 100.0, 1.0));
+    final JCheckBox chamferEnabled = new JCheckBox("路口（highway 交点）切角", false);
+    final JSpinner chamfer = new JSpinner(new SpinnerNumberModel(6.0, 0.0, 50.0, 1.0));
     final JCheckBox minorRoads = new JCheckBox("纳入服务道路、步行街", false);
     final JCheckBox selectedOnly = new JCheckBox("仅使用选中的道路", false);
     final NamingPanel naming = new NamingPanel();
@@ -26,14 +28,19 @@ public final class BlockFillPanel extends ToggleDialog {
         settings.add(new JLabel("用地类别（1—9 切换前九类）"),g);g.gridy++;settings.add(category,g);
         g.gridy++;settings.add(new JLabel("输出模式"),g);g.gridy++;settings.add(output,g);
         JPanel offset=new JPanel(new BorderLayout(6,0));offset.add(new JLabel("向内退界（米）"),BorderLayout.WEST);offset.add(inset,BorderLayout.CENTER);
-        g.gridy++;settings.add(offset,g);g.gridy++;settings.add(minorRoads,g);g.gridy++;settings.add(selectedOnly,g);
+        JPanel chamferRow=new JPanel(new BorderLayout(6,0));chamferRow.add(new JLabel("切角距离（米）"),BorderLayout.WEST);chamferRow.add(chamfer,BorderLayout.CENTER);
+        g.gridy++;settings.add(offset,g);g.gridy++;settings.add(chamferEnabled,g);g.gridy++;settings.add(chamferRow,g);g.gridy++;settings.add(minorRoads,g);g.gridy++;settings.add(selectedOnly,g);
         JButton refresh=new JButton("刷新道路 / 更新选中范围");refresh.addActionListener(e->{if(mode!=null)mode.invalidateGeometry();});g.gridy++;settings.add(refresh,g);
-        JTextArea help=new JTextArea("悬停预览 · 左键生成 · Ctrl+Z 撤销；创建不弹确认框\nOSM 常用标签会直接赋值，请核对分类和标签页内容。\nEsc 返回选择工具。默认退界5米，不纳入桥梁、隧道和非零layer道路。\n退界是近似值，实际地块边界仍需核对。");help.setLineWrap(true);help.setWrapStyleWord(true);help.setEditable(false);help.setOpaque(false);g.gridy++;settings.add(help,g);
+        JTextArea help=new JTextArea("悬停预览 · 左键生成 · Ctrl+Z 撤销；创建不弹确认框\nOSM 常用标签会直接赋值，请核对分类和标签页内容。\nEsc 返回选择工具。默认退界5米，不纳入桥梁、隧道和非零layer道路。\n退界是近似值，实际地块边界仍需核对。\n路口切角只作用于 highway 交点上的凸拐角，沿两侧各切此距离；\n距离超出相邻道路长度时会自动收敛，切角距离按生成后的地块边界量取。");help.setLineWrap(true);help.setWrapStyleWord(true);help.setEditable(false);help.setOpaque(false);g.gridy++;settings.add(help,g);
         g.gridy++;g.weighty=1;settings.add(Box.createVerticalGlue(),g);
         JTabbedPane tabs=new JTabbedPane();tabs.addTab("① 地块与标签",new JScrollPane(settings));tabs.addTab("② 架空名称（OGF）",new JScrollPane(naming));
         add(tabs,BorderLayout.CENTER);
         JPanel bottom=new JPanel(new BorderLayout(3,4));JButton start=new JButton("开始填充  Alt+Shift+L");start.addActionListener(e->{if(MainApplication.getMap()!=null)MainApplication.getMap().selectMapMode(mode);});bottom.add(start,BorderLayout.NORTH);bottom.add(status,BorderLayout.SOUTH);add(bottom,BorderLayout.SOUTH);
         category.addActionListener(e->{updateNameKind();changed(false);});output.addActionListener(e->changed(false));inset.addChangeListener(e->changed(false));minorRoads.addActionListener(e->changed(true));selectedOnly.addActionListener(e->changed(true));naming.onChanged(()->changed(false));updateNameKind();
+        chamfer.setToolTipText("沿路口两条道路边界各切除的距离，仅在 highway 交点上的凸拐角生效。");
+        chamfer.setEnabled(chamferEnabled.isSelected());
+        chamferEnabled.addActionListener(e->{chamfer.setEnabled(chamferEnabled.isSelected());changed(false);});
+        chamfer.addChangeListener(e->changed(false));
     }
     private void updateNameKind(){
         String code=entry()==null?"":entry().code();
@@ -50,5 +57,6 @@ public final class BlockFillPanel extends ToggleDialog {
     LanduseCatalog.Entry entry(){return (LanduseCatalog.Entry)category.getSelectedItem();}
     boolean localMode(){return output.getSelectedIndex()==1;}
     double insetMeters(){return ((Number)inset.getValue()).doubleValue();}
+    double chamferMeters(){return chamferEnabled.isSelected()?((Number)chamfer.getValue()).doubleValue():0;}
     void message(String text){status.setText(text);status.setToolTipText(text);}
 }

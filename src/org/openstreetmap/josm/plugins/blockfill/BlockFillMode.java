@@ -102,7 +102,7 @@ public final class BlockFillMode extends MapMode implements MapViewPaintable {
         if(mouse==null){panel.message("道路 "+geometry.edgeCount+" 段 / 街区 "+geometry.faces().size()+" 块；移入街区预览");repaint();return;}
         LatLon ll=MainApplication.getMap().mapView.getLatLon(mouse.x,mouse.y);
         BlockGeometry.Point p=meters.project(ll);
-        candidate=geometry.at(p.x(),p.y(),panel.insetMeters());
+        candidate=geometry.at(p.x(),p.y(),panel.insetMeters(),panel.chamferMeters());
         for(BlockGeometry.Face face:geometry.faces())if(face.path().contains(p.x(),p.y())){sourceFace=face;break;}
         if(candidate.valid())panel.message(String.format(Locale.ROOT,"%s · %.0f m² · 点击生成",panel.entry().name(),candidate.area()));
         else panel.message(candidate.error());repaint();

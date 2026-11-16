@@ -8,6 +8,7 @@ tools/
 
 # JOSM (downloaded)
 josm-custom.jar
+josm-tested.jar
 
 # IDE
 .idea/

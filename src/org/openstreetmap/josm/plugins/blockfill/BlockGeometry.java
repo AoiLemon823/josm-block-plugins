@@ -20,8 +20,13 @@ public final class BlockGeometry {
     }
     private record Arc(long to, int edge, double angle) { }
     private record Edge(long a, long b) { }
+    /** A corner cut may use at most this share of each adjacent edge, so two cuts never overlap. */
+    private static final double MAX_CUT_RATIO = 0.45;
+    /** Corners turning less than this sine (about 5 degrees) are straight boundaries, not corners worth cutting. */
+    private static final double MIN_TURN = Math.sin(Math.toRadians(5));
     private final List<Face> faces;
     private final List<Face> holes;
+    private final Set<Long> intersections;
     public final int edgeCount;
     public final int ignoredBridgeCount;
     public final int rejectedRingCount;
@@ -49,6 +54,10 @@ public final class BlockGeometry {
             list.removeIf(a -> bridges.contains(a.edge()));
             list.sort(Comparator.comparingDouble(Arc::angle));
         }
+        // Junction nodes keep three or more live road segments after dead-end pruning; only their block corners are cut.
+        Set<Long> junctions = new HashSet<>();
+        for (Map.Entry<Long, List<Arc>> entry : graph.entrySet()) if (entry.getValue().size() >= 3) junctions.add(entry.getKey());
+        intersections = Set.copyOf(junctions);
         Set<String> visited = new HashSet<>();
         List<Face> built = new ArrayList<>();
         List<Face> inner = new ArrayList<>();
@@ -95,7 +104,15 @@ public final class BlockGeometry {
     }
     public List<Face> faces() { return faces; }
 
-    public Candidate at(double x, double y, double insetMeters) {
+    /** True when the road graph still meets with three or more segments at this node (a highway intersection). */
+    public boolean isIntersection(long vertexId) { return intersections.contains(vertexId); }
+
+    public Candidate at(double x, double y, double insetMeters) { return at(x, y, insetMeters, 0); }
+
+    /**
+     * @param chamferMeters cut at highway-intersection corners, measured along the finished (inset) block edge
+     */
+    public Candidate at(double x, double y, double insetMeters, double chamferMeters) {
         Face chosen = null;
         for (Face f : faces) if (f.path().contains(x, y)) { chosen = f; break; }
         if (chosen == null) {
@@ -116,12 +133,15 @@ public final class BlockGeometry {
             if(f.path().contains(x,y))return Candidate.fail("街区内部存在独立闭合道路内环；请先检查或分割，避免误填。");
         }
         if (!Double.isFinite(insetMeters) || insetMeters < 0 || insetMeters > 100) return Candidate.fail("退界距离应在 0—100 米之间。");
+        if (!Double.isFinite(chamferMeters) || chamferMeters < 0 || chamferMeters > 100) return Candidate.fail("切角距离应在 0—100 米之间。");
+        List<Point> base = chamferMeters > 0 ? chamfered(chosen.vertices(), chamferMeters, insetMeters) : pointsOf(chosen.vertices());
+        Path2D.Double basePath = path(base);
         if (insetMeters == 0) {
-            List<Point> p = chosen.vertices().stream().map(v -> new Point(v.x(), v.y())).toList();
-            return new Candidate(p, chosen.area(), null);
+            if (chamferMeters > 0 && !basePath.contains(x, y)) return Candidate.fail("鼠标位于路口切角带内，请向地块内部移动。");
+            return new Candidate(List.copyOf(base), Math.abs(signedPoints(base)), null);
         }
-        Area inset = new Area(chosen.path());
-        inset.subtract(new Area(new BasicStroke((float)(insetMeters*2), BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND).createStrokedShape(chosen.path())));
+        Area inset = new Area(basePath);
+        inset.subtract(new Area(new BasicStroke((float)(insetMeters*2), BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND).createStrokedShape(basePath)));
         if (inset.isEmpty()) return Candidate.fail("退界距离过大，地块已消失。");
         List<List<Point>> rings = rings(inset);
         if (rings.size() != 1) return Candidate.fail("退界后出现多个分离区域或孔洞，请减小退界距离。");
@@ -129,6 +149,40 @@ public final class BlockGeometry {
         if (points.size() < 3 || points.size() > MAX_RING_POINTS) return Candidate.fail("退界后的轮廓过于复杂。");
         if (!path(points).contains(x, y)) return Candidate.fail("鼠标位于道路退界带内，请移到地块更内部。");
         return new Candidate(List.copyOf(points), Math.abs(signedPoints(points)), null);
+    }
+    private static List<Point> pointsOf(List<Vertex> ring) {
+        List<Point> result = new ArrayList<>(ring.size());
+        for (Vertex v : ring) result.add(new Point(v.x(), v.y()));
+        return result;
+    }
+    /**
+     * Replace every convex corner that sits on a highway intersection by two cut points.
+     * The corner geometry references Columbina (https://github.com/Daredemodaisuki/Columbina), feature
+     * {@code chamfer/ChamferGenerator}: walk the cut distance along both adjacent edges and join the two
+     * points. Only that corner geometry is reused; Columbina's intent/operation system is not involved.
+     * The inset pulls the boundary back by {@code inset}, so the cut is lengthened by
+     * {@code inset*(1-sin(a/2))/(sin(a/2)*cos(a/2))} to keep the visible cut {@code distance} metres from the
+     * inset corner. Reflex or nearly straight corners are left untouched.
+     */
+    private List<Point> chamfered(List<Vertex> ring, double distance, double inset) {
+        int n = ring.size();
+        List<Point> result = new ArrayList<>(n + 4);
+        for (int i = 0; i < n; i++) {
+            Vertex previous = ring.get((i + n - 1) % n), current = ring.get(i), next = ring.get((i + 1) % n);
+            double inX = current.x() - previous.x(), inY = current.y() - previous.y();
+            double outX = next.x() - current.x(), outY = next.y() - current.y();
+            double inLength = Math.hypot(inX, inY), outLength = Math.hypot(outX, outY);
+            if (!intersections.contains(current.id()) || inLength < 1e-6 || outLength < 1e-6) { result.add(new Point(current.x(), current.y())); continue; }
+            // Faces are counter-clockwise, so only a left-turning (convex) corner may be cut; cutting a reflex corner would grow the block.
+            if ((inX * outY - inY * outX) / (inLength * outLength) < MIN_TURN) { result.add(new Point(current.x(), current.y())); continue; }
+            double angle = Math.acos(Math.max(-1, Math.min(1, (-inX * outX - inY * outY) / (inLength * outLength))));
+            double half = angle / 2, sin = Math.sin(half), cos = Math.cos(half);
+            double cut = distance + inset * (1 - sin) / (sin * cos);
+            double back = Math.min(cut, inLength * MAX_CUT_RATIO), forward = Math.min(cut, outLength * MAX_CUT_RATIO);
+            result.add(new Point(current.x() - inX / inLength * back, current.y() - inY / inLength * back));
+            result.add(new Point(current.x() + outX / outLength * forward, current.y() + outY / outLength * forward));
+        }
+        return result;
     }
     public static Path2D.Double path(List<Point> p) {
         Path2D.Double path = new Path2D.Double();

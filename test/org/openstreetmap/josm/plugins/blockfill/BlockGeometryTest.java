@@ -29,6 +29,21 @@ public final class BlockGeometryTest {
         BlockGeometry adjacent=create(blocks);check(adjacent.faces().size()==2,"adjacent blocks share and reuse a boundary");
         check(adjacent.at(20,50,0).valid()&&adjacent.at(80,50,0).valid(),"both adjacent blocks selectable");
         check(!adjacent.at(50,50,0).valid(),"shared boundary is not an interior");
-        System.out.println("PASS: closed face, dead-end pruning, inset guards, inner-ring rejection, adjacent faces, shared-edge click");
+        // Chamfer: only convex corners sitting on a highway intersection are cut.
+        check(adjacent.isIntersection(q.id())&&!adjacent.isIntersection(p.id()),"junction degree decides which corners are cut");
+        Candidate plain=adjacent.at(20,50,0,0),cut=adjacent.at(20,50,0,6);
+        check(plain.valid()&&cut.valid(),"chamfered block remains clickable");
+        check(cut.points().size()==plain.points().size()+2,"the two junction corners become four cut points");
+        check(hasPoint(cut,44,0)&&hasPoint(cut,50,6),"cut points walk six metres along both road edges");
+        check(!hasPoint(cut,50,0),"the original intersection corner is replaced");
+        check(Math.abs(cut.area()-(plain.area()-36))<1e-6,"chamfer removes both corner triangles");
+        check(!adjacent.at(49,0.5,0,6).valid(),"click in the cut-off corner band is rejected");
+        check(adjacent.at(20,50,0,90).valid(),"oversized chamfer is clamped to the adjacent road length");
+        check(adjacent.at(80,50,0,6).valid()&&adjacent.at(80,50,0,6).points().size()==6,"both blocks at the junction are cut");
+        check(adjacent.at(20,50,5,6).valid(),"inset and chamfer combine");
+        check(geometry.at(50,50,0,10).points().size()==geometry.at(50,50,0).points().size(),"a plain bend without an intersection is unchanged");
+        check(tail.at(50,50,0,10).points().size()==tail.at(50,50,0).points().size(),"a pruned dead-end spur is not a highway intersection");
+        System.out.println("PASS: closed face, dead-end pruning, inset guards, inner-ring rejection, adjacent faces, shared-edge click, junction chamfer");
     }
+    private static boolean hasPoint(Candidate candidate,double x,double y){for(Point p:candidate.points())if(Math.abs(p.x()-x)<1e-6&&Math.abs(p.y()-y)<1e-6)return true;return false;}
 }
