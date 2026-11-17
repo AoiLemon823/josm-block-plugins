@@ -49,7 +49,7 @@ public final class NamingPanel extends JPanel {
         Collections.addAll(controls,city,district,road,developer,level,refresh,list,selectedName);
         enabled.addActionListener(e->{clearSelection();updateEnabled();refreshCandidatesIfReady();});
         // Rebuild classification when the user edits a local research code or reloads classes.
-        enabled.setToolTipText("勾选后才会给新地块生成架空名称；默认关闭。");
+        enabled.setToolTipText("勾选后将在绘制时给新地块同步生成架空名称；默认关闭。");
         state.setToolTipText("填写城市和区县后自动生成候选并默认使用第一条；点一行或直接编辑名称即可切换下一块名称，点地图创建。");
         developer.setToolTipText("开发商/品牌只用于新建商品房、常规商业和商务办公；社区商业、老社区和村寨风格不加开发商品牌。");
         refresh.setToolTipText("按当前城市、区县、道路、开发商和命名风格重新生成一批候选。");
@@ -86,7 +86,7 @@ public final class NamingPanel extends JPanel {
     private static String descriptionHtml(int width){
         // Swing HTML maps CSS px to points (~4/3 device pixels), so scale down to fit the label width.
         int css=Math.max(90,width*3/4);
-        return "<html><body style='width:"+css+"px'>启用后，绘制地块时同步添加随机架空名称。填写必填的「城市」「区县」及可选的「道路」「开发商 / 品牌」后，下方列表会自动生成候选并默认使用第一条，点选候选项即可切换，每次绘制后自动刷新；亦可直接编辑「下一块名称」字段，未填写名称时，每块创建时自动随机命名。</body></html>";
+        return "<html><body style='width:"+css+"px'>启用后，绘制地块时同步添加随机架空名称。填写必填的「城市」「区县」及可选的「道路」「开发商 / 品牌」，下方列表会自动生成候选名称，默认使用第一条，点选其他候选项即可切换，每次绘制后自动刷新；亦可直接编辑「下一块名称」字段，未填写名称时，创建每块时将自动随机命名。</body></html>";
     }
     void onChanged(Runnable action){changed=action;}
     private void row(GridBagConstraints g,JComponent component){g.gridy++;form.add(component,g);}

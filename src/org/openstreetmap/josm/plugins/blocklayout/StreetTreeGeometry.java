@@ -138,7 +138,7 @@ public final class StreetTreeGeometry {
 
         String message = placed.isEmpty() 
             ? "没有找到可完整放入地块的行道树位置。" 
-            : String.format("可生成 %d 棵行道树；拒绝 %d 个越界位置。", placed.size(), rejected);
+            : String.format("可生成 %d 棵行道树；跳过了 %d 个越界位置。", placed.size(), rejected);
         return new Result(placed, rejected, message);
     }
 

@@ -37,7 +37,7 @@ public final class BlockFillPanel extends ToggleDialog {
     private boolean layerListenersAttached;
     private boolean layerHintShown;
     public BlockFillPanel() {
-        super("街区填充", "edit", "道路围合生成面与用地分类", null, 440);
+        super("街区填充", "edit", "在道路围合区域生成用地面之面板", null, 440);
         // ToggleDialog keys visibility and collapse state by icon name; use a plugin-specific prefix
         // so several plugin panels do not share (and corrupt) each other's dock/minimized state.
         preferencePrefix="blockfill";
@@ -49,15 +49,15 @@ public final class BlockFillPanel extends ToggleDialog {
         category = new JComboBox<>(entries.toArray(new LanduseCatalog.Entry[0]));
         JPanel settings = new JPanel(new GridBagLayout());
         GridBagConstraints g=new GridBagConstraints();g.gridx=0;g.gridy=0;g.weightx=1;g.fill=GridBagConstraints.HORIZONTAL;g.insets=new Insets(4,6,4,6);
-        settings.add(hint("用地类别（1—9 切换前九类）","1—9 快速切换前九类。创建时把所选分类对应的 OSM 常用标签直接写入地块，请核对分类与标签页内容。"),g);g.gridy++;settings.add(category,g);
-        g.gridy++;settings.add(hint("输出模式","OSM 常用标签（推荐）直接赋值标准标签；本地研究模式只保存中国分类代码，仅供本地研究，不上传 OSM。"),g);g.gridy++;settings.add(output,g);
-        JPanel offset=new JPanel(new BorderLayout(6,0));offset.add(hint("向内退界（米）","默认退界 5 米，为近似值，实际地块边界仍需核对。"),BorderLayout.WEST);offset.add(inset,BorderLayout.CENTER);
-        JPanel chamferRow=new JPanel(new BorderLayout(6,0));chamferRow.add(hint("切角距离（米）","路口切角只作用于 highway 交点上的凸拐角，沿两侧道路边界各切此距离；距离超出相邻道路长度时会自动收敛，切角距离按生成后的地块边界量取。"),BorderLayout.WEST);chamferRow.add(chamfer,BorderLayout.CENTER);
-        chamferEnabled.setToolTipText("只作用于 highway 交点上的凸拐角，沿两侧道路边界各切设定距离。");
-        minorRoads.setToolTipText("默认不纳入桥梁、隧道和非零 layer 道路；勾选后额外纳入服务道路、步行街等次要道路参与围合。");
-        selectedOnly.setToolTipText("只使用当前选中的道路围合地块，忽略其他道路。");
+        settings.add(hint("用地类别（数字键 1—9 快速切换前九类）","创建地块时将同时写入下方类别对应的用地标签，可使用数字键 1—9 快速切换前九类。"),g);g.gridy++;settings.add(category,g);
+        g.gridy++;settings.add(hint("输出模式","OSM 常用标签（推荐）：直接赋值标准标签；本地研究模式：仅保存中国分类代码供本地测试、研究使用，不推荐上传。"),g);g.gridy++;settings.add(output,g);
+        JPanel offset=new JPanel(new BorderLayout(6,0));offset.add(hint("向内退界（米）","用地地块从道路中心线起退缩的距离，默认 5 米。"),BorderLayout.WEST);offset.add(inset,BorderLayout.CENTER);
+        JPanel chamferRow=new JPanel(new BorderLayout(6,0));chamferRow.add(hint("切角距离（米）","在 highway 交点额外进行拐角的距离；距离超出相邻道路长度时会自动收敛，切角距离按生成后的地块边界量取。"),BorderLayout.WEST);chamferRow.add(chamfer,BorderLayout.CENTER);
+        chamferEnabled.setToolTipText("在 highway 交点额外进行拐角，启用后将沿两侧道路边界各切设定距离。");
+        minorRoads.setToolTipText("用于围合之道路默认不包含服务道路、步行街等次要道路及桥梁、隧道等各种非零 layer 道路；勾选以使之参与围合。");
+        selectedOnly.setToolTipText("只使用当前选中的道路计算围合地块，忽略其他道路。");
         g.gridy++;settings.add(offset,g);g.gridy++;settings.add(chamferEnabled,g);g.gridy++;settings.add(chamferRow,g);g.gridy++;settings.add(minorRoads,g);g.gridy++;settings.add(selectedOnly,g);
-        JButton refresh=new JButton("刷新道路 / 更新选中范围");refresh.addActionListener(e->{if(mode!=null)mode.invalidateGeometry();});g.gridy++;settings.add(refresh,g);
+        JButton refresh=new JButton("使用新的选择范围重算道路与街区");refresh.addActionListener(e->{if(mode!=null)mode.invalidateGeometry();});g.gridy++;settings.add(refresh,g);
         g.gridy++;g.weighty=1;settings.add(Box.createVerticalGlue(),g);
         JTabbedPane tabs=new JTabbedPane();tabs.addTab("① 地块与标签",new JScrollPane(settings));tabs.addTab("② 架空名称（OGF）",naming);
         JPanel bottom=new JPanel(new BorderLayout(3,4));modeButton.addActionListener(e->toggleMode());

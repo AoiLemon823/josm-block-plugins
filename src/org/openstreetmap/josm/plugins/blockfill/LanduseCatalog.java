@@ -8,7 +8,7 @@ import java.util.*;
 /** User-editable UTF-8 TSV, optionally overridden by -Dblockfill.catalog=absolutePath. */
 public final class LanduseCatalog {
     public record Entry(String name, String code, Color color, Map<String,String> osmTags) {
-        @Override public String toString() { return name + "  [" + code + "]"; }
+        @Override public String toString() { return name + " [" + code + "]"; }
     }
     public static List<Entry> load() throws IOException {
         String override=System.getProperty("blockfill.catalog");

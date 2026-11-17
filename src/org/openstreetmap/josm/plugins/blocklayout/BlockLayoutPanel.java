@@ -80,7 +80,7 @@ public final class BlockLayoutPanel extends ToggleDialog {
         addFullRow(factories,row++,factoryMode);if(devMode){addFullRow(factories,row++,factoryRoads);addRow(factories,row++,"道路宽度（米）",factoryRoadWidth);addRow(factories,row++,"道路建筑退距（米）",factoryRoadClearance);}
         addRow(factories,row++,"厂房最小短边（米）",factoryMinWidth);addRow(factories,row++,"厂房最大短边（米）",factoryMaxWidth);addRow(factories,row++,"厂房最小长边（米）",factoryMinLength);addRow(factories,row++,"厂房最大长边（米）",factoryMaxLength);addRow(factories,row++,"标准层高（米）",factoryFloorHeight);addRow(factories,row++,"最少层数",factoryMinLevels);addRow(factories,row++,"最多层数",factoryMaxLevels);addRow(factories,row++,"地块退界（米）",factorySetback);addRow(factories,row++,"同排间隔（米）",factoryGap);addRow(factories,row++,"排间间隔（米）",factoryRowGap);addRow(factories,row++,"联排最大栋数（0关闭）",factoryGroupSize);addRow(factories,row++,"随机种子",factorySeed);
         JPanel trees=devMode?new JPanel(new GridBagLayout()):null;if(trees!=null){trees.setBorder(BorderFactory.createEmptyBorder(8,8,8,8));row=0;
-        addFullRow(trees,row++,streetTreeMode);addRow(trees,row++,"生成模式",treeMode);addRow(trees,row++,"行道树间距(米)",treeSpacing);addRow(trees,row++,"距道路边偏移(米)",treeOffset);addFullRow(trees,row++,treeDoubleSide);}
+        addFullRow(trees,row++,streetTreeMode);addRow(trees,row++,"生成模式",treeMode);addRow(trees,row++,"行道树间距（米）",treeSpacing);addRow(trees,row++,"距道路边偏移(米)",treeOffset);addFullRow(trees,row++,treeDoubleSide);}
         tabs.addTab("住宅",housing);tabs.addTab("底商",shops);tabs.addTab("工业",factories);if(devMode&&trees!=null)tabs.addTab("行道树",trees);
         JPanel direction=new JPanel(new GridBagLayout());direction.setBorder(BorderFactory.createEmptyBorder(6,8,6,8));row=0;addFullRow(direction,row++,pickEdge);addFullRow(direction,row++,resetEdge);addFullRow(direction,row++,directionStatus);addFullRow(direction,row++,selectionHint);
         JButton previewButton=new JButton("开始排布预览");previewButton.addActionListener(e->{try{if(mode!=null)mode.startPreview();}catch(RuntimeException ex){message(ex.getMessage());}});
@@ -106,7 +106,7 @@ public final class BlockLayoutPanel extends ToggleDialog {
         communityShops.addActionListener(e->{if(communityShops.isSelected())tabs.setSelectedIndex(1);});
         factoryRoads.addActionListener(e->settingsChanged());
         streetTreeMode.addActionListener(e->{if(streetTreeMode.isSelected()){communityShops.setSelected(false);useSample.setSelected(false);factoryMode.setSelected(false);tabs.setSelectedIndex(3);selectionHint.setText(treeMode.getSelectedIndex()==0?"选择闭合地块;插件将沿地块内service道路生成行道树。":"选择一条highway道路(非snservice);插件将沿道路生成行道树。");}settingsChanged();});
-        treeMode.addActionListener(e->{if(streetTreeMode.isSelected()){selectionHint.setText(treeMode.getSelectedIndex()==0?"选择闭合地块;插件将沿地块内service道路生成行道树。":"选择一条highway道路(非snservice);插件将沿道路生成行道树。");}settingsChanged();});
+        treeMode.addActionListener(e->{if(streetTreeMode.isSelected()){selectionHint.setText(treeMode.getSelectedIndex()==0?"选择闭合地块，插件将沿地块内service道路生成行道树。":"选择一条非service的道路，插件将沿道路生成行道树。");}settingsChanged();});
         treeDoubleSide.addActionListener(e->settingsChanged());
         pickEdge.addActionListener(e->{if(mode!=null)mode.beginDirectionPick();});resetEdge.addActionListener(e->{if(mode!=null)mode.resetDirection();});
         loadLastSettings();

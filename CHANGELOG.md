@@ -10,12 +10,13 @@ All notable changes to the JOSM BlockFill and BlockLayout plugins.
   - Deleting the last layer no longer raises an error: plugin cleanup releases modes and listeners instead of removing dialogs from the already destroyed map frame.
   - The panel mode button now shows the shortcut actually assigned by JOSM, including reassigned shortcuts.
   - Typing in text fields or spinner editors no longer triggers JOSM global shortcuts (for example "a" entering draw mode); key presses without a local text binding are consumed while focus stays inside the panel.
+  - Fixing the issue where the panel can not be collapsed. 
 
 #### New features
   - Optional highway-intersection corner chamfer with a configurable cut distance; only convex corners at highway junctions are cut, and the distance is clamped to the adjacent road length. Corner geometry references [Columbina](https://github.com/Daredemodaisuki/Columbina) (`chamfer/ChamferGenerator`).
 
 #### UI and UX improvements
-  - Improved wording, tooltips, wrapped status messages and panel layout (including title-bar collapsing) for a cleaner interface.
+  - Improved wording, tooltips, wrapped status messages and panel layout for a cleaner interface.
   - Fictional names are filled in automatically for the next parcel: candidates refresh automatically and the first one is used by default, and editing the name box applies immediately without a separate confirmation step.
 
 ## [1.0.0] — 2026-11-09

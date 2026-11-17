@@ -157,7 +157,7 @@ public final class BlockLayoutMode extends MapMode implements MapViewPaintable {
                 List<LayoutGeometry.Road> roads;
                 if(panel.treeUseSelectedRoad()){
                     roads=selected.stream().filter(w->w.isUsable()&&!w.isClosed()&&w.hasTag("highway")&&!w.hasTag("highway","service")&&w.getNodesCount()>=2&&nearProjectionOrigin(w,projectionOrigin)).map(w->{double roadWidth=4;try{String value=w.get("width");if(value!=null)roadWidth=Double.parseDouble(value);}catch(NumberFormatException ignored){}return new LayoutGeometry.Road(w.getNodes().stream().map(n->projection.project(n.getCoor())).toList(),roadWidth);}).toList();
-                    if(roads.isEmpty())throw new IllegalArgumentException("请选择至少一条带highway标签(非snservice)的道路。");
+                    if(roads.isEmpty())throw new IllegalArgumentException("请选择至少一条非service的highway道路。");
                     StreetTreeGeometry.Settings treeSettings=new StreetTreeGeometry.Settings(panel.treeSpacing(),panel.treeOffset(),panel.treeDoubleSide());
                     StreetTreeGeometry.Result result=StreetTreeGeometry.layoutRoadTrees(roads.get(0),treeSettings);
                     treePreview=result.trees();footprintPreview=List.of();shopPreview=List.of();roadPreview=List.of();factoryPreview=List.of();preview=null;previewKind=PreviewKind.STREET_TREES;capturePreview(selected);ready=true;
@@ -221,7 +221,7 @@ public final class BlockLayoutMode extends MapMode implements MapViewPaintable {
         if(e.getButton()!=MouseEvent.BUTTON1 || e.isControlDown() || e.isAltDown() || e.isShiftDown()) return;
         if(directionPick){pickDirection(e);return;}
         if(!ready)return;
-        if((preview==null||preview.buildings().isEmpty())&&footprintPreview.isEmpty()&&factoryPreview.isEmpty()&&shopPreview.isEmpty()&&roadPreview.isEmpty()&&treePreview.isEmpty()) { panel.message("没有可生成的合规对象。"); return; }
+        if((preview==null||preview.buildings().isEmpty())&&footprintPreview.isEmpty()&&factoryPreview.isEmpty()&&shopPreview.isEmpty()&&roadPreview.isEmpty()&&treePreview.isEmpty()) { panel.message("抱歉，此处暂时无法生成对象。"); return; }
         createBuildings();
     }
 
@@ -256,7 +256,7 @@ public final class BlockLayoutMode extends MapMode implements MapViewPaintable {
                 committing=true;
                 try { UndoRedoHandler.getInstance().add(new SequenceCommand("行道树："+treeCount+"棵",commands)); }
                 finally { committing=false; }
-                panel.message("已生成 "+treeCount+" 棵行道树；Ctrl+Z可一次撤销。");
+                panel.message("已生成 "+treeCount+" 棵行道树；Ctrl+Z 可一次撤销。");
                 ready=false;preview=null;footprintPreview=List.of();shopPreview=List.of();roadPreview=List.of();factoryPreview=List.of();factoryPreviewLevels=List.of();treePreview=List.of();previewParcelIds=java.util.Set.of();previewGeometry=Map.of();repaintMap();
                 return;
             }
