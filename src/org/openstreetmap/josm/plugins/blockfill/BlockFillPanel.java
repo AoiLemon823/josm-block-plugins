@@ -2,8 +2,15 @@ package org.openstreetmap.josm.plugins.blockfill;
 
 import javax.swing.*;
 import java.awt.*;
+import java.awt.event.*;
 import java.util.List;
+import org.openstreetmap.josm.gui.MapFrame;
 import org.openstreetmap.josm.gui.dialogs.ToggleDialog;
+import org.openstreetmap.josm.gui.layer.Layer;
+import org.openstreetmap.josm.gui.layer.LayerManager;
+import org.openstreetmap.josm.gui.layer.MainLayerManager;
+import org.openstreetmap.josm.gui.layer.OsmDataLayer;
+import org.openstreetmap.josm.spi.preferences.Config;
 import org.openstreetmap.josm.tools.Logging;
 import org.openstreetmap.josm.gui.MainApplication;
 
@@ -11,29 +18,106 @@ public final class BlockFillPanel extends ToggleDialog {
     final JComboBox<LanduseCatalog.Entry> category;
     final JComboBox<String> output = new JComboBox<>(new String[]{"OSM 常用标签（推荐）", "本地研究（保存中国分类）"});
     final JSpinner inset = new JSpinner(new SpinnerNumberModel(5.0, 0.0, 100.0, 1.0));
+    final JCheckBox chamferEnabled = new JCheckBox("路口（highway 交点）切角", false);
+    final JSpinner chamfer = new JSpinner(new SpinnerNumberModel(6.0, 0.0, 50.0, 1.0));
     final JCheckBox minorRoads = new JCheckBox("纳入服务道路、步行街", false);
     final JCheckBox selectedOnly = new JCheckBox("仅使用选中的道路", false);
     final NamingPanel naming = new NamingPanel();
-    final JLabel status = new JLabel("点击“开始填充”，再将鼠标移入街区");
+    final JLabel status = new StatusLabel("点击“进入街区填充模式”，再将鼠标移入绘图区");
+    final JButton modeButton = new JButton("进入街区填充模式");
     private BlockFillMode mode;
+    private boolean modeActive;
+    private final AWTEventListener shortcutShield=this::shieldShortcuts;
+    private final LayerManager.LayerChangeListener layerListener=new LayerManager.LayerChangeListener(){
+        @Override public void layerAdded(LayerManager.LayerAddEvent e){refreshLayerAvailability();}
+        @Override public void layerRemoving(LayerManager.LayerRemoveEvent e){SwingUtilities.invokeLater(BlockFillPanel.this::refreshLayerAvailability);}
+        @Override public void layerOrderChanged(LayerManager.LayerOrderChangeEvent e){refreshLayerAvailability();}
+    };
+    private final MainLayerManager.ActiveLayerChangeListener activeLayerListener=e->refreshLayerAvailability();
+    private boolean layerListenersAttached;
+    private boolean layerHintShown;
     public BlockFillPanel() {
-        super("街区填充", "edit", "道路围合生成面与用地分类", null, 440);
+        super("街区填充", "edit", "在道路围合区域生成用地面之面板", null, 440);
+        // ToggleDialog keys visibility and collapse state by icon name; use a plugin-specific prefix
+        // so several plugin panels do not share (and corrupt) each other's dock/minimized state.
+        preferencePrefix="blockfill";
+        isShowing=Config.getPref().getBoolean(preferencePrefix+".visible",false);
+        isDocked=Config.getPref().getBoolean(preferencePrefix+".docked",true);
+        isCollapsed=Config.getPref().getBoolean(preferencePrefix+".minimized",false);
         List<LanduseCatalog.Entry> entries;
         try { entries=LanduseCatalog.load(); } catch(Exception ex) { Logging.error(ex); entries=List.of(new LanduseCatalog.Entry("居住用地", "0701", new Color(0xE8C547), java.util.Map.of("landuse","residential"))); }
         category = new JComboBox<>(entries.toArray(new LanduseCatalog.Entry[0]));
         JPanel settings = new JPanel(new GridBagLayout());
         GridBagConstraints g=new GridBagConstraints();g.gridx=0;g.gridy=0;g.weightx=1;g.fill=GridBagConstraints.HORIZONTAL;g.insets=new Insets(4,6,4,6);
-        settings.add(new JLabel("用地类别（1—9 切换前九类）"),g);g.gridy++;settings.add(category,g);
-        g.gridy++;settings.add(new JLabel("输出模式"),g);g.gridy++;settings.add(output,g);
-        JPanel offset=new JPanel(new BorderLayout(6,0));offset.add(new JLabel("向内退界（米）"),BorderLayout.WEST);offset.add(inset,BorderLayout.CENTER);
-        g.gridy++;settings.add(offset,g);g.gridy++;settings.add(minorRoads,g);g.gridy++;settings.add(selectedOnly,g);
-        JButton refresh=new JButton("刷新道路 / 更新选中范围");refresh.addActionListener(e->{if(mode!=null)mode.invalidateGeometry();});g.gridy++;settings.add(refresh,g);
-        JTextArea help=new JTextArea("悬停预览 · 左键生成 · Ctrl+Z 撤销；创建不弹确认框\nOSM 常用标签会直接赋值，请核对分类和标签页内容。\nEsc 返回选择工具。默认退界5米，不纳入桥梁、隧道和非零layer道路。\n退界是近似值，实际地块边界仍需核对。");help.setLineWrap(true);help.setWrapStyleWord(true);help.setEditable(false);help.setOpaque(false);g.gridy++;settings.add(help,g);
+        settings.add(hint("用地类别（数字键 1—9 快速切换前九类）","创建地块时将同时写入下方类别对应的用地标签，可使用数字键 1—9 快速切换前九类。"),g);g.gridy++;settings.add(category,g);
+        g.gridy++;settings.add(hint("输出模式","OSM 常用标签（推荐）：直接赋值标准标签；本地研究模式：仅保存中国分类代码供本地测试、研究使用，不推荐上传。"),g);g.gridy++;settings.add(output,g);
+        JPanel offset=new JPanel(new BorderLayout(6,0));offset.add(hint("向内退界（米）","用地地块从道路中心线起退缩的距离，默认 5 米。"),BorderLayout.WEST);offset.add(inset,BorderLayout.CENTER);
+        JPanel chamferRow=new JPanel(new BorderLayout(6,0));chamferRow.add(hint("切角距离（米）","在 highway 交点额外进行拐角的距离；距离超出相邻道路长度时会自动收敛，切角距离按生成后的地块边界量取。"),BorderLayout.WEST);chamferRow.add(chamfer,BorderLayout.CENTER);
+        chamferEnabled.setToolTipText("在 highway 交点额外进行拐角，启用后将沿两侧道路边界各切设定距离。");
+        minorRoads.setToolTipText("用于围合之道路默认不包含服务道路、步行街等次要道路及桥梁、隧道等各种非零 layer 道路；勾选以使之参与围合。");
+        selectedOnly.setToolTipText("只使用当前选中的道路计算围合地块，忽略其他道路。");
+        g.gridy++;settings.add(offset,g);g.gridy++;settings.add(chamferEnabled,g);g.gridy++;settings.add(chamferRow,g);g.gridy++;settings.add(minorRoads,g);g.gridy++;settings.add(selectedOnly,g);
+        JButton refresh=new JButton("使用新的选择范围重算道路与街区");refresh.addActionListener(e->{if(mode!=null)mode.invalidateGeometry();});g.gridy++;settings.add(refresh,g);
         g.gridy++;g.weighty=1;settings.add(Box.createVerticalGlue(),g);
-        JTabbedPane tabs=new JTabbedPane();tabs.addTab("① 地块与标签",new JScrollPane(settings));tabs.addTab("② 架空名称（OGF）",new JScrollPane(naming));
-        add(tabs,BorderLayout.CENTER);
-        JPanel bottom=new JPanel(new BorderLayout(3,4));JButton start=new JButton("开始填充  Alt+Shift+L");start.addActionListener(e->{if(MainApplication.getMap()!=null)MainApplication.getMap().selectMapMode(mode);});bottom.add(start,BorderLayout.NORTH);bottom.add(status,BorderLayout.SOUTH);add(bottom,BorderLayout.SOUTH);
+        JTabbedPane tabs=new JTabbedPane();tabs.addTab("① 地块与标签",new JScrollPane(settings));tabs.addTab("② 架空名称（OGF）",naming);
+        JPanel bottom=new JPanel(new BorderLayout(3,4));modeButton.addActionListener(e->toggleMode());
+        bottom.add(modeButton,BorderLayout.NORTH);bottom.add(status,BorderLayout.SOUTH);
+        JPanel body=new JPanel(new BorderLayout());body.add(tabs,BorderLayout.CENTER);body.add(bottom,BorderLayout.SOUTH);
+        createLayout(body,false,null);
         category.addActionListener(e->{updateNameKind();changed(false);});output.addActionListener(e->changed(false));inset.addChangeListener(e->changed(false));minorRoads.addActionListener(e->changed(true));selectedOnly.addActionListener(e->changed(true));naming.onChanged(()->changed(false));updateNameKind();
+        chamfer.setToolTipText("沿路口两条道路边界各切除的距离，仅在 highway 交点上的凸拐角生效。");
+        chamfer.setEnabled(chamferEnabled.isSelected());
+        chamferEnabled.addActionListener(e->{chamfer.setEnabled(chamferEnabled.isSelected());changed(false);});
+        chamfer.addChangeListener(e->changed(false));
+        Toolkit.getDefaultToolkit().addAWTEventListener(shortcutShield,AWTEvent.KEY_EVENT_MASK);
+        attachLayerListeners();refreshLayerAvailability();
+    }
+    /**
+     * JOSM registers global shortcuts on the main window, so typing letters into a docked text field can
+     * trigger map modes (for example "a" for drawing). While focus is inside this panel's text fields,
+     * keep bindings owned by the focus owner itself (editing, navigation, clipboard) and consume the rest.
+     */
+    private void shieldShortcuts(AWTEvent event){
+        if(event.getID()!=KeyEvent.KEY_PRESSED)return;
+        KeyEvent key=(KeyEvent)event;
+        Component focus=KeyboardFocusManager.getCurrentKeyboardFocusManager().getFocusOwner();
+        if(!(focus instanceof javax.swing.text.JTextComponent target)||!SwingUtilities.isDescendingFrom(target,this))return;
+        if(key.getKeyCode()==KeyEvent.VK_TAB)return;
+        if(target.getInputMap(JComponent.WHEN_FOCUSED).get(KeyStroke.getKeyStrokeForEvent(key))!=null)return;
+        key.consume();
+    }
+    @Override public void destroy(){
+        Toolkit.getDefaultToolkit().removeAWTEventListener(shortcutShield);
+        MainLayerManager layers=MainApplication.getLayerManager();
+        if(layers!=null&&layerListenersAttached){layers.removeLayerChangeListener(layerListener);layers.removeActiveLayerChangeListener(activeLayerListener);layerListenersAttached=false;}
+        super.destroy();
+    }
+    private void attachLayerListeners(){
+        MainLayerManager layers=MainApplication.getLayerManager();
+        if(layers==null||layerListenersAttached)return;
+        layers.addLayerChangeListener(layerListener);
+        layers.addActiveLayerChangeListener(activeLayerListener);
+        layerListenersAttached=true;
+    }
+    /** Requires the active layer itself to be an editable OSM data layer, not merely a remembered edit layer. */
+    private static boolean hasEditableLayer(){
+        MainLayerManager layers=MainApplication.getLayerManager();
+        if(layers==null)return false;
+        Layer active=layers.getActiveLayer();
+        return active instanceof OsmDataLayer data&&!data.isLocked()&&!data.isUploadInProgress();
+    }
+    /** The fill mode requires an editable OSM data layer; otherwise disable the toggle and explain why. */
+    private void refreshLayerAvailability(){
+        boolean editable=hasEditableLayer();
+        modeButton.setEnabled(editable);
+        modeButton.setToolTipText(editable?null:"请新增或切换到可编辑的 OSM 数据图层");
+        if(!editable){
+            status.setText("请新增或切换到可编辑的 OSM 数据图层后再进入街区填充模式。");
+            layerHintShown=true;
+        }else if(layerHintShown){
+            layerHintShown=false;
+            if(!modeActive)status.setText("点击“进入街区填充模式”，再将鼠标移入绘图区");
+        }
     }
     private void updateNameKind(){
         String code=entry()==null?"":entry().code();
@@ -45,10 +129,57 @@ public final class BlockFillPanel extends ToggleDialog {
     }
     String generatedName(java.util.Collection<String> existing){return naming.nameForCreation(existing);}
     void nameCreated(String name){naming.creationSucceeded(name);}
-    void attach(BlockFillMode mode){this.mode=mode;}
+    void attach(BlockFillMode mode){this.mode=mode;updateModeButton();refreshLayerAvailability();}
+    void modeActiveChanged(boolean active){modeActive=active;updateModeButton();}
+    @Override public void showNotify(){updateModeButton();refreshLayerAvailability();}
+    private void toggleMode(){
+        MapFrame map=MainApplication.getMap();
+        if(map==null)return;
+        if(modeActive){map.selectSelectTool(false);return;}
+        if(!hasEditableLayer()){refreshLayerAvailability();return;}
+        if(mode!=null)map.selectMapMode(mode);
+    }
+    private void updateModeButton(){
+        if(modeActive){modeButton.setText("退出街区填充模式（Esc）");return;}
+        String key="";
+        if(mode!=null&&mode.getShortcut()!=null){
+            try{key=mode.getShortcut().getKeyText();}catch(RuntimeException ignored){ }
+        }
+        modeButton.setText(key==null||key.isEmpty()?"进入街区填充模式":"进入街区填充模式（"+key+"）");
+    }
     void changed(boolean rebuild){if(mode!=null){if(rebuild)mode.invalidateGeometry();else mode.refreshPreview();}}
     LanduseCatalog.Entry entry(){return (LanduseCatalog.Entry)category.getSelectedItem();}
     boolean localMode(){return output.getSelectedIndex()==1;}
     double insetMeters(){return ((Number)inset.getValue()).doubleValue();}
+    double chamferMeters(){return chamferEnabled.isSelected()?((Number)chamfer.getValue()).doubleValue():0;}
     void message(String text){status.setText(text);status.setToolTipText(text);}
+    private static JLabel hint(String text,String tip){
+        JLabel label=new JLabel(text);
+        label.setToolTipText("<html><body style='width:240px'>"+tip+"</body></html>");
+        return label;
+    }
+    /** Status label that wraps long messages to the current panel width instead of truncating with an ellipsis. */
+    private static final class StatusLabel extends JLabel {
+        private String raw;
+        private int wrapWidth;
+        StatusLabel(String text){super();setRaw(text);}
+        @Override public void setText(String text){setRaw(text);}
+        private void setRaw(String text){
+            raw=text==null?"":text;
+            setToolTipText(raw);
+            applyWrap();
+        }
+        @Override public void setBounds(int x,int y,int w,int h){
+            if(w>20&&w!=wrapWidth){wrapWidth=w;applyWrap();}
+            super.setBounds(x,y,w,h);
+        }
+        private void applyWrap(){
+            // Swing HTML treats CSS px as points, so scale down to fit the label width.
+            int css=Math.max(90,(wrapWidth>0?wrapWidth:240)*3/4);
+            super.setText("<html><body style='width:"+css+"px'>"+escape(raw)+"</body></html>");
+        }
+        private static String escape(String text){
+            return text.replace("&","&amp;").replace("<","&lt;").replace(">","&gt;").replace("\n","<br>");
+        }
+    }
 }

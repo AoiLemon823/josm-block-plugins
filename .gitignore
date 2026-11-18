@@ -1,13 +1,14 @@
 # Build artifacts
 build/
 build-layout/
-dist/
+# dist/
 
 # JDK tools (bundled)
 tools/
 
 # JOSM (downloaded)
 josm-custom.jar
+josm-tested.jar
 
 # IDE
 .idea/

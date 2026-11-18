@@ -23,6 +23,8 @@ public final class BlockFillMode extends MapMode implements MapViewPaintable {
     private static final Set<String> MAIN_ROADS=Set.of("motorway","motorway_link","trunk","trunk_link","primary","primary_link","secondary","secondary_link","tertiary","tertiary_link","unclassified","residential","living_street","road","service","pedestrian");
     private final BlockFillPanel panel;
     private final javax.swing.Timer previewTimer;
+    private final javax.swing.Timer statusTimer=new javax.swing.Timer(3000,e->refreshPreview());
+    private boolean initialBuild=true;
     private DataSet data;
     private DataSet geometryData;
     private BlockGeometry geometry;
@@ -40,7 +42,7 @@ public final class BlockFillMode extends MapMode implements MapViewPaintable {
     static final class LocalMeters {
         private static final double R=6371008.8;
         final double lon0,lat0,cos;
-        LocalMeters(double lat,double lon){lat0=lat;lon0=lon;cos=Math.cos(Math.toRadians(lat));if(Math.abs(cos)<0.01)throw new IllegalArgumentException("第一版不支持极地区域。");}
+        LocalMeters(double lat,double lon){lat0=lat;lon0=lon;cos=Math.cos(Math.toRadians(lat));if(Math.abs(cos)<0.01)throw new IllegalArgumentException("当前版本不支持极地区域。");}
         BlockGeometry.Point project(LatLon ll){return new BlockGeometry.Point(R*Math.toRadians(ll.lon()-lon0)*cos,R*Math.toRadians(ll.lat()-lat0));}
         LatLon inverse(BlockGeometry.Point p){return new LatLon(lat0+Math.toDegrees(p.y()/R),lon0+Math.toDegrees(p.x()/(R*cos)));}
     }
@@ -50,21 +52,29 @@ public final class BlockFillMode extends MapMode implements MapViewPaintable {
         putValue(LARGE_ICON_KEY,BlockFillIcons.icon());
         this.panel=panel;
         previewTimer=new javax.swing.Timer(110,e -> updatePreview());previewTimer.setRepeats(false);
+        statusTimer.setRepeats(false);
     }
-    @Override public boolean layerIsSupported(Layer layer){return layer instanceof OsmDataLayer;}
+    @Override public boolean layerIsSupported(Layer layer){return layer instanceof OsmDataLayer data&&!data.isLocked()&&!data.isUploadInProgress();}
     @Override public void enterMode() {
-        super.enterMode();active=true;
+        super.enterMode();active=true;panel.modeActiveChanged(true);
+        initialBuild=true;statusTimer.stop();
         MainApplication.getMap().mapView.addMouseListener(this);MainApplication.getMap().mapView.addMouseMotionListener(this);MainApplication.getMap().mapView.addTemporaryLayer(this);
         KeyboardFocusManager.getCurrentKeyboardFocusManager().addKeyEventDispatcher(keys);
-        panel.showDialog();bindData();invalidateGeometry();
+        panel.unfurlDialog();bindData();invalidateGeometry();
     }
     @Override public void exitMode() {
-        active=false;previewTimer.stop();revision++;
-        if(worker!=null)worker.cancel(true);
+        panel.modeActiveChanged(false);
+        dispose();
         if(MainApplication.getMap()!=null){MainApplication.getMap().mapView.removeMouseListener(this);MainApplication.getMap().mapView.removeMouseMotionListener(this);MainApplication.getMap().mapView.removeTemporaryLayer(this);}
+        panel.message("点击“进入街区填充模式”以启用街区填充功能");
+        super.exitMode();
+    }
+    /** Releases listeners without touching MainApplication.getMap() or the panel, both of which are already gone when JOSM destroys the map frame. */
+    void dispose(){
+        active=false;previewTimer.stop();statusTimer.stop();revision++;
+        if(worker!=null)worker.cancel(true);
         KeyboardFocusManager.getCurrentKeyboardFocusManager().removeKeyEventDispatcher(keys);
         if(data!=null)data.removeDataSetListener(listener);data=null;geometry=null;candidate=null;sourceFace=null;
-        super.exitMode();
     }
     private void bindData(){
         DataSet now=MainApplication.getLayerManager().getEditDataSet();
@@ -72,20 +82,24 @@ public final class BlockFillMode extends MapMode implements MapViewPaintable {
     }
     void invalidateGeometry(){
         if(!SwingUtilities.isEventDispatchThread()){SwingUtilities.invokeLater(this::invalidateGeometry);return;}
-        geometry=null;candidate=null;sourceFace=null;buildError=null;revision++;
+        geometry=null;candidate=null;sourceFace=null;buildError=null;revision++;statusTimer.stop();
         if(worker!=null)worker.cancel(true);
         if(active){previewTimer.restart();repaint();}
     }
     void refreshPreview(){if(active){previewTimer.restart();repaint();}}
     @Override public void mouseMoved(MouseEvent e){mouse=e.getPoint();previewTimer.restart();}
     @Override public void mouseDragged(MouseEvent e){candidate=null;sourceFace=null;repaint();}
-    @Override public void mouseExited(MouseEvent e){mouse=null;candidate=null;sourceFace=null;repaint();}
+    @Override public void mouseExited(MouseEvent e){mouse=null;candidate=null;sourceFace=null;showIdleStatus();repaint();}
     @Override public void mousePressed(MouseEvent e){
         if(e.getButton()!=MouseEvent.BUTTON1 || e.isControlDown()||e.isAltDown()||e.isShiftDown())return;
         mouse=e.getPoint();previewTimer.stop();updatePreview();
-        if(candidate==null||!candidate.valid()){if(candidate!=null)panel.message(candidate.error());return;}
+        if(data==null){fail("请先创建或打开可编辑的 OSM 数据图层。");return;}
+        if(candidate==null){if(buildError!=null)fail(buildError);return;}
+        if(!candidate.valid()){fail(candidate.error());return;}
         createArea();
     }
+    /** Failure during an explicit click must be visible even if the panel is collapsed or the status line is overlooked. */
+    private void fail(String message){panel.message(message);new Notification("街区填充："+message).setIcon(javax.swing.JOptionPane.ERROR_MESSAGE).show();}
     private boolean dispatchKey(KeyEvent e){
         if(!active||e.getID()!=KeyEvent.KEY_PRESSED||e.isControlDown()||e.isAltDown()||e.isMetaDown())return false;
         Component focus=KeyboardFocusManager.getCurrentKeyboardFocusManager().getFocusOwner();
@@ -99,13 +113,17 @@ public final class BlockFillMode extends MapMode implements MapViewPaintable {
         bindData();candidate=null;sourceFace=null;
         if(data==null){panel.message("请先创建或打开可编辑的 OSM 数据图层。");repaint();return;}
         if(geometry==null||geometryData!=data){if(buildError!=null){panel.message(buildError);return;}if(worker==null||worker.isDone())build();return;}
-        if(mouse==null){panel.message("道路 "+geometry.edgeCount+" 段 / 街区 "+geometry.faces().size()+" 块；移入街区预览");repaint();return;}
+        if(mouse==null){showIdleStatus();repaint();return;}
         LatLon ll=MainApplication.getMap().mapView.getLatLon(mouse.x,mouse.y);
         BlockGeometry.Point p=meters.project(ll);
-        candidate=geometry.at(p.x(),p.y(),panel.insetMeters());
+        candidate=geometry.at(p.x(),p.y(),panel.insetMeters(),panel.chamferMeters());
         for(BlockGeometry.Face face:geometry.faces())if(face.path().contains(p.x(),p.y())){sourceFace=face;break;}
-        if(candidate.valid())panel.message(String.format(Locale.ROOT,"%s · %.0f m² · 点击生成",panel.entry().name(),candidate.area()));
+        if(candidate.valid())panel.message(String.format(Locale.ROOT,"%s，面积 %.0f m² · 左键以确认地块",panel.entry().name(),candidate.area()));
         else panel.message(candidate.error());repaint();
+    }
+    private void showIdleStatus(){
+        if(geometry==null)panel.message("正在读取当前视口道路…");
+        else panel.message("当前读入道路 "+geometry.edgeCount+" 段，可构建街区 "+geometry.faces().size()+" 块 · 鼠标移入绘图区以预览并填充地块");
     }
     private void build(){
         if(data==null)return;
@@ -148,7 +166,13 @@ public final class BlockFillMode extends MapMode implements MapViewPaintable {
             @Override protected BuildResult doInBackground(){return new BuildResult(new BlockGeometry(segments),local);}
             @Override protected void done(){
                 if(!active||token!=revision||snapshotData!=MainApplication.getLayerManager().getEditDataSet()||isCancelled())return;
-                try{BuildResult r=get();geometry=r.geometry();meters=r.meters();geometryData=snapshotData;worker=null;if(geometry.rejectedRingCount>0){panel.message("拒绝了 "+geometry.rejectedRingCount+" 个过于复杂的闭合环，请缩小范围或按选中道路筛选。");repaint();return;}updatePreview();}
+                try{BuildResult r=get();geometry=r.geometry();meters=r.meters();geometryData=snapshotData;worker=null;
+                    boolean first=initialBuild;initialBuild=false;
+                    if(geometry.rejectedRingCount>0){
+                        panel.message((first?"读入":"重读")+"地块完成，拒绝了 "+geometry.rejectedRingCount+" 个过于复杂的闭合环，请缩小范围或按选中道路筛选。");
+                        statusTimer.restart();repaint();return;
+                    }
+                    updatePreview();}
                 catch(Exception ex){Logging.error(ex);buildError="围合计算失败："+(ex.getCause()==null?ex.getMessage():ex.getCause().getMessage());panel.message(buildError);worker=null;}
             }
         };worker.execute();
@@ -167,11 +191,11 @@ public final class BlockFillMode extends MapMode implements MapViewPaintable {
     private void createArea(){
         DataSet current=MainApplication.getLayerManager().getEditDataSet();if(current!=data){invalidateGeometry();return;}
         Map<String,String> tags=new LinkedHashMap<>();
-        String generatedName;
-        try { generatedName=panel.generatedName(panel.naming.existingNames()); }
-        catch(RuntimeException ex){panel.message("名称生成失败："+ex.getMessage());return;}
+        String generatedName;boolean nameSkipped;
+        try { generatedName=panel.generatedName(panel.naming.existingNames());nameSkipped=panel.naming.consumeNameSkippedWarning(); }
+        catch(RuntimeException ex){fail("名称生成失败："+ex.getMessage());return;}
         if(panel.localMode()){tags.put("blockfill:class",panel.entry().code());tags.put("blockfill:class_name",panel.entry().name());tags.put("blockfill:scheme","CN-2023");tags.put("blockfill:inset_m",Double.toString(panel.insetMeters()));}
-        else{tags.putAll(panel.entry().osmTags());if(tags.isEmpty()){panel.message("此类别不能直接对应单一 OSM 标签；请用本地研究模式，或先细分用途。");return;}}
+        else{tags.putAll(panel.entry().osmTags());if(tags.isEmpty()){fail("此类别不能直接对应单一 OSM 标签；请用本地研究模式，或先细分用途。");return;}}
         if(generatedName!=null)tags.put("name",generatedName);
         List<LatLon> coords=candidate.points().stream().map(meters::inverse).toList();
         // Compare full interiors, not only the click position. Never overwrite or overlay an existing mapped area.
@@ -185,17 +209,17 @@ public final class BlockFillMode extends MapMode implements MapViewPaintable {
             if(!overlap.isEmpty()){
                 // Buildings and small amenities routinely lie inside landuse. Block landuse footprints, and warn for other areas only in status.
                 if(existing.hasKey("landuse")||existing.hasKey("blockfill:class")||existing.hasKey("leisure")||existing.hasKey("natural")){
-                    data.setSelected(existing);panel.message("已有用地/绿地/自然面与候选区域重叠，已选中；请核对或分割后再填充。");return;
+                    data.setSelected(existing);fail("已有用地/绿地/自然面与候选区域重叠，已选中；请核对或分割后再填充。");return;
                 }
             }
         }
         for(Relation r:data.getRelations()){
             if(!r.isUsable()||!r.isMultipolygon()||!(r.hasKey("landuse")||r.hasKey("leisure")||r.hasKey("natural")||r.hasKey("blockfill:class")))continue;
             for(RelationMember member:r.getMembers())if(member.isWay()){
-                Way w=member.getWay(); for(Node n:w.getNodes())if(n.getCoor()!=null){BlockGeometry.Point p=meters.project(n.getCoor());if(intended.contains(p.x(),p.y())){data.setSelected(r);panel.message("候选范围内存在用地多多边形关系，请先检查；第一版不自动叠加。");return;}}
+                Way w=member.getWay(); for(Node n:w.getNodes())if(n.getCoor()!=null){BlockGeometry.Point p=meters.project(n.getCoor());if(intended.contains(p.x(),p.y())){data.setSelected(r);fail("候选范围内存在其他复合多边形关系，已选中；当前版本暂不支持此情况下生成地块，请先检查");return;}}
                 if(w.isClosed()){
                     List<BlockGeometry.Point> points=new ArrayList<>();for(Node n:w.getNodes())if(n.getCoor()!=null)points.add(meters.project(n.getCoor()));
-                    Area overlap=new Area(BlockGeometry.path(points));overlap.intersect(intended);if(!overlap.isEmpty()){data.setSelected(r);panel.message("候选区域与用地多多边形关系重叠，请先核对。");return;}
+                    Area overlap=new Area(BlockGeometry.path(points));overlap.intersect(intended);if(!overlap.isEmpty()){data.setSelected(r);fail("候选区域与已有复合多边形关系重叠，已选中；请先核对。");return;}
                 }
             }
         }
@@ -206,6 +230,11 @@ public final class BlockFillMode extends MapMode implements MapViewPaintable {
         UndoRedoHandler.getInstance().add(new SequenceCommand("街区填充："+panel.entry().name(),commands));data.setSelected(area);
         panel.nameCreated(generatedName);
         panel.message("已生成 "+panel.entry().name()+(generatedName==null?"":"："+generatedName)+"；Ctrl+Z 撤销，继续点击下一块。");
+        if(nameSkipped){
+            String warning="未生成名称：需要填写「城市」和「区县」。";
+            new Notification("街区填充："+warning).setIcon(javax.swing.JOptionPane.WARNING_MESSAGE).show();
+            panel.message("已生成 "+panel.entry().name()+"；未附加名称（缺少城市 / 区县）。Ctrl+Z 撤销，继续点击下一块。");
+        }
         candidate=null;sourceFace=null;repaint();
     }
     private void repaint(){if(MainApplication.getMap()!=null)MainApplication.getMap().mapView.repaint();}
@@ -219,5 +248,5 @@ public final class BlockFillMode extends MapMode implements MapViewPaintable {
         }finally{g.dispose();}
     }
     private Path2D.Double screen(List<BlockGeometry.Point> points,MapView mv){Path2D.Double p=new Path2D.Double();for(int i=0;i<points.size();i++){Point pixel=mv.getPoint(meters.inverse(points.get(i)));if(i==0)p.moveTo(pixel.x,pixel.y);else p.lineTo(pixel.x,pixel.y);}p.closePath();return p;}
-    @Override public String getModeHelpText(){return "街区填充：悬停预览、点击生成，1—9 切换用地，Esc 退出；Ctrl+Z 撤销。";}
+    @Override public String getModeHelpText(){return "街区填充：鼠标悬停预览地块，左键确认地块，Ctrl+Z 撤销。数字键 1—9 切换用地，Esc 退出工具。";}
 }

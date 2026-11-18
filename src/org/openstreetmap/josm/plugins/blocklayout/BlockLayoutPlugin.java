@@ -21,8 +21,9 @@ public final class BlockLayoutPlugin extends Plugin {
 
     @Override public void mapFrameInitialized(MapFrame oldFrame, MapFrame newFrame) {
         if(oldFrame!=null && oldFrame!=newFrame) {
-            if(panel!=null) oldFrame.removeToggleDialog(panel);
-            if(mode!=null) { if(button!=null)oldFrame.allMapModeButtons.remove(button);mode.exitMode(); }
+            // JOSM destroys the old map frame (dialogs, toolbars and modes) before notifying plugins,
+            // so removing its dialogs/buttons or calling exitMode() would throw; only release our state.
+            if(mode!=null)mode.dispose();
             panel=null;mode=null;button=null;
         }
         if(newFrame==null)return;

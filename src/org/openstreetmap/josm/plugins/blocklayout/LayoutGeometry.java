@@ -86,7 +86,7 @@ public final class LayoutGeometry {
                 }
             }
         }
-        String message = placed.isEmpty() ? "没有找到可完整放入地块且避开既有建筑的位置。" : "可放置 " + placed.size() + " 栋；拒绝 " + rejected + " 个越界或冲突位置。";
+        String message = placed.isEmpty() ? "没有找到可完整放入地块且避开既有建筑的位置。" : "可放置 " + placed.size() + " 栋；跳过了 " + rejected + " 个越界或冲突位置。";
         return new Result(placed,rejected,rowGap,message);
     }
 
@@ -236,7 +236,7 @@ public final class LayoutGeometry {
             }
         }
         List<Footprint> worldPlaced=placed.stream().map(f->new Footprint(f.ring().stream().map(toWorld).toList())).toList();
-        String message=worldPlaced.isEmpty()?"没有找到可完整放入地块且避开既有建筑的位置。":"可放置 "+worldPlaced.size()+" 栋样板楼；拒绝 "+rejected+" 个越界或冲突位置。";
+        String message=worldPlaced.isEmpty()?"没有找到可完整放入地块且避开既有建筑的位置。":"可放置 "+worldPlaced.size()+" 栋样板楼；跳过了 "+rejected+" 个越界或冲突位置。";
         return new FootprintResult(worldPlaced,rejected,rowGap,message);
     }
 

@@ -84,15 +84,20 @@ public final class BlockLayoutMode extends MapMode implements MapViewPaintable {
     }
 
     @Override public void exitMode() {
-        active=false; ready=false; preview=null;footprintPreview=List.of();shopPreview=List.of();roadPreview=List.of();factoryPreview=List.of();factoryPreviewLevels=List.of();treePreview=List.of(); projection=null;previewParcelIds=java.util.Set.of();previewGeometry=Map.of();
-        if(data!=null){data.removeDataSetListener(dataListener);data=null;}
-        KeyboardFocusManager.getCurrentKeyboardFocusManager().removeKeyEventDispatcher(keyDispatcher);
+        dispose();
         if (MainApplication.getMap()!=null) {
             MainApplication.getMap().mapView.removeMouseListener(this);
             MainApplication.getMap().mapView.removeMouseMotionListener(this);
             MainApplication.getMap().mapView.removeTemporaryLayer(this);
         }
         super.exitMode();
+    }
+
+    /** Releases listeners without touching MainApplication.getMap(), which is already null while JOSM destroys the map frame. */
+    void dispose() {
+        active=false; ready=false; preview=null;footprintPreview=List.of();shopPreview=List.of();roadPreview=List.of();factoryPreview=List.of();factoryPreviewLevels=List.of();treePreview=List.of(); projection=null;previewParcelIds=java.util.Set.of();previewGeometry=Map.of();
+        if(data!=null){data.removeDataSetListener(dataListener);data=null;}
+        KeyboardFocusManager.getCurrentKeyboardFocusManager().removeKeyEventDispatcher(keyDispatcher);
     }
 
     void startPreview() {
@@ -152,7 +157,7 @@ public final class BlockLayoutMode extends MapMode implements MapViewPaintable {
                 List<LayoutGeometry.Road> roads;
                 if(panel.treeUseSelectedRoad()){
                     roads=selected.stream().filter(w->w.isUsable()&&!w.isClosed()&&w.hasTag("highway")&&!w.hasTag("highway","service")&&w.getNodesCount()>=2&&nearProjectionOrigin(w,projectionOrigin)).map(w->{double roadWidth=4;try{String value=w.get("width");if(value!=null)roadWidth=Double.parseDouble(value);}catch(NumberFormatException ignored){}return new LayoutGeometry.Road(w.getNodes().stream().map(n->projection.project(n.getCoor())).toList(),roadWidth);}).toList();
-                    if(roads.isEmpty())throw new IllegalArgumentException("请选择至少一条带highway标签(非snservice)的道路。");
+                    if(roads.isEmpty())throw new IllegalArgumentException("请选择至少一条非service的highway道路。");
                     StreetTreeGeometry.Settings treeSettings=new StreetTreeGeometry.Settings(panel.treeSpacing(),panel.treeOffset(),panel.treeDoubleSide());
                     StreetTreeGeometry.Result result=StreetTreeGeometry.layoutRoadTrees(roads.get(0),treeSettings);
                     treePreview=result.trees();footprintPreview=List.of();shopPreview=List.of();roadPreview=List.of();factoryPreview=List.of();preview=null;previewKind=PreviewKind.STREET_TREES;capturePreview(selected);ready=true;
@@ -216,7 +221,7 @@ public final class BlockLayoutMode extends MapMode implements MapViewPaintable {
         if(e.getButton()!=MouseEvent.BUTTON1 || e.isControlDown() || e.isAltDown() || e.isShiftDown()) return;
         if(directionPick){pickDirection(e);return;}
         if(!ready)return;
-        if((preview==null||preview.buildings().isEmpty())&&footprintPreview.isEmpty()&&factoryPreview.isEmpty()&&shopPreview.isEmpty()&&roadPreview.isEmpty()&&treePreview.isEmpty()) { panel.message("没有可生成的合规对象。"); return; }
+        if((preview==null||preview.buildings().isEmpty())&&footprintPreview.isEmpty()&&factoryPreview.isEmpty()&&shopPreview.isEmpty()&&roadPreview.isEmpty()&&treePreview.isEmpty()) { panel.message("抱歉，此处暂时无法生成对象。"); return; }
         createBuildings();
     }
 
@@ -251,7 +256,7 @@ public final class BlockLayoutMode extends MapMode implements MapViewPaintable {
                 committing=true;
                 try { UndoRedoHandler.getInstance().add(new SequenceCommand("行道树："+treeCount+"棵",commands)); }
                 finally { committing=false; }
-                panel.message("已生成 "+treeCount+" 棵行道树；Ctrl+Z可一次撤销。");
+                panel.message("已生成 "+treeCount+" 棵行道树；Ctrl+Z 可一次撤销。");
                 ready=false;preview=null;footprintPreview=List.of();shopPreview=List.of();roadPreview=List.of();factoryPreview=List.of();factoryPreviewLevels=List.of();treePreview=List.of();previewParcelIds=java.util.Set.of();previewGeometry=Map.of();repaintMap();
                 return;
             }
@@ -353,7 +358,7 @@ public final class BlockLayoutMode extends MapMode implements MapViewPaintable {
     private static final class LocalProjection {
         private static final double R=6371008.8;
         private final double lat0,lon0,cos;
-        LocalProjection(LatLon origin){lat0=origin.lat();lon0=origin.lon();cos=Math.cos(Math.toRadians(lat0));if(Math.abs(cos)<0.01)throw new IllegalArgumentException("第一版不支持极地区域。");}
+        LocalProjection(LatLon origin){lat0=origin.lat();lon0=origin.lon();cos=Math.cos(Math.toRadians(lat0));if(Math.abs(cos)<0.01)throw new IllegalArgumentException("当前版本不支持极地区域。");}
         LayoutGeometry.Point project(LatLon ll){return new LayoutGeometry.Point(R*Math.toRadians(ll.lon()-lon0)*cos,R*Math.toRadians(ll.lat()-lat0));}
         LatLon inverse(LayoutGeometry.Point p){return new LatLon(lat0+Math.toDegrees(p.y()/R),lon0+Math.toDegrees(p.x()/(R*cos)));}
     }

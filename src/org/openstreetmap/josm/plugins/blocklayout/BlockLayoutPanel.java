@@ -1,22 +1,31 @@
 package org.openstreetmap.josm.plugins.blocklayout;
 
+import java.awt.AWTEvent;
 import java.awt.BorderLayout;
+import java.awt.Component;
 import java.awt.GridBagConstraints;
 import java.awt.GridBagLayout;
 import java.awt.Insets;
+import java.awt.KeyboardFocusManager;
+import java.awt.Toolkit;
+import java.awt.event.AWTEventListener;
+import java.awt.event.KeyEvent;
 import java.awt.event.MouseWheelEvent;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import javax.swing.BorderFactory;
 import javax.swing.JButton;
 import javax.swing.JComboBox;
+import javax.swing.JComponent;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
 import javax.swing.JCheckBox;
 import javax.swing.JSpinner;
 import javax.swing.JScrollPane;
 import javax.swing.JTextArea;
+import javax.swing.KeyStroke;
 import javax.swing.SpinnerNumberModel;
+import javax.swing.SwingUtilities;
 import javax.swing.event.ChangeListener;
 import org.openstreetmap.josm.gui.dialogs.ToggleDialog;
 import org.openstreetmap.josm.spi.preferences.Config;
@@ -51,9 +60,16 @@ public final class BlockLayoutPanel extends ToggleDialog {
     private boolean loading;
     private boolean devMode=java.lang.Boolean.getBoolean("blocklayout.dev");
     private String activePreset="自定义 / 上次参数";
+    private final AWTEventListener shortcutShield=this::shieldShortcuts;
 
     public BlockLayoutPanel() {
         super("建筑排布","edit","在选中的闭合地块内预览住宅楼、底商和厂房布局",null,360);
+        // ToggleDialog keys visibility and collapse state by icon name; use a plugin-specific prefix
+        // so several plugin panels do not share (and corrupt) each other's dock/minimized state.
+        preferencePrefix="blocklayout";
+        isShowing=Config.getPref().getBoolean(preferencePrefix+".visible",false);
+        isDocked=Config.getPref().getBoolean(preferencePrefix+".docked",true);
+        isCollapsed=Config.getPref().getBoolean(preferencePrefix+".minimized",false);
         JPanel housing=new JPanel(new GridBagLayout());housing.setBorder(BorderFactory.createEmptyBorder(8,8,8,8));
         int row=0;addRow(housing,row++,"住宅预设",preset);addRow(housing,row++,"建筑短边宽度（米）",width);addRow(housing,row++,"建筑长边长度（米）",length);addRow(housing,row++,"建筑高度（米）",height);
         addRow(housing,row++,"建筑端部退距（米）",endSetback);addRow(housing,row++,"同排楼栋侧向净距（米）",sideClearance);addRow(housing,row++,"最小排间距（米）",rowSpacing);addRow(housing,row++,"日照距离系数",sunFactor);addRow(housing,row++,"生成标签",buildingTag);
@@ -64,7 +80,7 @@ public final class BlockLayoutPanel extends ToggleDialog {
         addFullRow(factories,row++,factoryMode);if(devMode){addFullRow(factories,row++,factoryRoads);addRow(factories,row++,"道路宽度（米）",factoryRoadWidth);addRow(factories,row++,"道路建筑退距（米）",factoryRoadClearance);}
         addRow(factories,row++,"厂房最小短边（米）",factoryMinWidth);addRow(factories,row++,"厂房最大短边（米）",factoryMaxWidth);addRow(factories,row++,"厂房最小长边（米）",factoryMinLength);addRow(factories,row++,"厂房最大长边（米）",factoryMaxLength);addRow(factories,row++,"标准层高（米）",factoryFloorHeight);addRow(factories,row++,"最少层数",factoryMinLevels);addRow(factories,row++,"最多层数",factoryMaxLevels);addRow(factories,row++,"地块退界（米）",factorySetback);addRow(factories,row++,"同排间隔（米）",factoryGap);addRow(factories,row++,"排间间隔（米）",factoryRowGap);addRow(factories,row++,"联排最大栋数（0关闭）",factoryGroupSize);addRow(factories,row++,"随机种子",factorySeed);
         JPanel trees=devMode?new JPanel(new GridBagLayout()):null;if(trees!=null){trees.setBorder(BorderFactory.createEmptyBorder(8,8,8,8));row=0;
-        addFullRow(trees,row++,streetTreeMode);addRow(trees,row++,"生成模式",treeMode);addRow(trees,row++,"行道树间距(米)",treeSpacing);addRow(trees,row++,"距道路边偏移(米)",treeOffset);addFullRow(trees,row++,treeDoubleSide);}
+        addFullRow(trees,row++,streetTreeMode);addRow(trees,row++,"生成模式",treeMode);addRow(trees,row++,"行道树间距（米）",treeSpacing);addRow(trees,row++,"距道路边偏移(米)",treeOffset);addFullRow(trees,row++,treeDoubleSide);}
         tabs.addTab("住宅",housing);tabs.addTab("底商",shops);tabs.addTab("工业",factories);if(devMode&&trees!=null)tabs.addTab("行道树",trees);
         JPanel direction=new JPanel(new GridBagLayout());direction.setBorder(BorderFactory.createEmptyBorder(6,8,6,8));row=0;addFullRow(direction,row++,pickEdge);addFullRow(direction,row++,resetEdge);addFullRow(direction,row++,directionStatus);addFullRow(direction,row++,selectionHint);
         JButton previewButton=new JButton("开始排布预览");previewButton.addActionListener(e->{try{if(mode!=null)mode.startPreview();}catch(RuntimeException ex){message(ex.getMessage());}});
@@ -72,8 +88,10 @@ public final class BlockLayoutPanel extends ToggleDialog {
         JTextArea note=new JTextArea("住宅三类预设和自定义分别记忆修改值。厂房联排按同尺寸矩形组生成，彼此保留同排间隔；0关闭，1仅单栋，2以上随机选择组内栋数。组团优先使用长边范围上段。改变随机种子可更换布局。拾取地块边可确定排列方向。\n\n左键确认一次生成，Ctrl+Z一次撤销；建筑需完整位于地块内。厂房尺寸范围是概化外轮廓，不等同于结构轴线模数，也不是消防或规划合规审查。");
         note.setLineWrap(true);note.setWrapStyleWord(true);note.setEditable(false);note.setOpaque(false);
         JPanel content=scrollContentPanel();content.add(tabs,BorderLayout.NORTH);content.add(direction,BorderLayout.CENTER);content.add(note,BorderLayout.SOUTH);
-        JScrollPane scroll=new JScrollPane(content,JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED,JScrollPane.HORIZONTAL_SCROLLBAR_NEVER);scroll.setBorder(BorderFactory.createEmptyBorder());scroll.setViewportBorder(BorderFactory.createEmptyBorder(0,0,0,3));scroll.getVerticalScrollBar().setUnitIncrement(18);add(scroll,BorderLayout.CENTER);
-        JPanel footer=new JPanel(new BorderLayout(4,4));footer.setBorder(BorderFactory.createEmptyBorder(3,4,3,4));footer.add(status,BorderLayout.CENTER);add(footer,BorderLayout.SOUTH);
+        JScrollPane scroll=new JScrollPane(content,JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED,JScrollPane.HORIZONTAL_SCROLLBAR_NEVER);scroll.setBorder(BorderFactory.createEmptyBorder());scroll.setViewportBorder(BorderFactory.createEmptyBorder(0,0,0,3));scroll.getVerticalScrollBar().setUnitIncrement(18);
+        JPanel footer=new JPanel(new BorderLayout(4,4));footer.setBorder(BorderFactory.createEmptyBorder(3,4,3,4));footer.add(status,BorderLayout.CENTER);
+        JPanel body=new JPanel(new BorderLayout());body.add(scroll,BorderLayout.CENTER);body.add(footer,BorderLayout.SOUTH);
+        createLayout(body,false,null);
         ChangeListener changed=e->{if(!loading)settingsChanged();};
         for(JSpinner spinner:new JSpinner[]{width,length,height,endSetback,sideClearance,rowSpacing,sunFactor,shopSetback,shopDepth,shopHeight,shopRoadClearance,factoryRoadWidth,factoryRoadClearance,factoryMinWidth,factoryMaxWidth,factoryMinLength,factoryMaxLength,factoryFloorHeight,factoryMinLevels,factoryMaxLevels,factorySetback,factoryGap,factoryRowGap,factorySeed,factoryGroupSize}){
             spinner.addChangeListener(changed);
@@ -88,11 +106,28 @@ public final class BlockLayoutPanel extends ToggleDialog {
         communityShops.addActionListener(e->{if(communityShops.isSelected())tabs.setSelectedIndex(1);});
         factoryRoads.addActionListener(e->settingsChanged());
         streetTreeMode.addActionListener(e->{if(streetTreeMode.isSelected()){communityShops.setSelected(false);useSample.setSelected(false);factoryMode.setSelected(false);tabs.setSelectedIndex(3);selectionHint.setText(treeMode.getSelectedIndex()==0?"选择闭合地块;插件将沿地块内service道路生成行道树。":"选择一条highway道路(非snservice);插件将沿道路生成行道树。");}settingsChanged();});
-        treeMode.addActionListener(e->{if(streetTreeMode.isSelected()){selectionHint.setText(treeMode.getSelectedIndex()==0?"选择闭合地块;插件将沿地块内service道路生成行道树。":"选择一条highway道路(非snservice);插件将沿道路生成行道树。");}settingsChanged();});
+        treeMode.addActionListener(e->{if(streetTreeMode.isSelected()){selectionHint.setText(treeMode.getSelectedIndex()==0?"选择闭合地块，插件将沿地块内service道路生成行道树。":"选择一条非service的道路，插件将沿道路生成行道树。");}settingsChanged();});
         treeDoubleSide.addActionListener(e->settingsChanged());
         pickEdge.addActionListener(e->{if(mode!=null)mode.beginDirectionPick();});resetEdge.addActionListener(e->{if(mode!=null)mode.resetDirection();});
         loadLastSettings();
+        Toolkit.getDefaultToolkit().addAWTEventListener(shortcutShield,AWTEvent.KEY_EVENT_MASK);
     }
+
+    /**
+     * JOSM global shortcuts live on the main window, so typing into a docked text field can trigger map
+     * modes. While focus is inside this panel's text fields, keep bindings owned by the focus owner and
+     * consume the rest.
+     */
+    private void shieldShortcuts(AWTEvent event){
+        if(event.getID()!=KeyEvent.KEY_PRESSED)return;
+        KeyEvent key=(KeyEvent)event;
+        Component focus=KeyboardFocusManager.getCurrentKeyboardFocusManager().getFocusOwner();
+        if(!(focus instanceof javax.swing.text.JTextComponent target)||!SwingUtilities.isDescendingFrom(target,this))return;
+        if(key.getKeyCode()==KeyEvent.VK_TAB)return;
+        if(target.getInputMap(JComponent.WHEN_FOCUSED).get(KeyStroke.getKeyStrokeForEvent(key))!=null)return;
+        key.consume();
+    }
+    @Override public void destroy(){Toolkit.getDefaultToolkit().removeAWTEventListener(shortcutShield);super.destroy();}
 
     private static Map<String,LayoutSettings> presets(){
         Map<String,LayoutSettings> m=new LinkedHashMap<>();
