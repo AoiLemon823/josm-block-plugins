@@ -248,5 +248,88 @@ public final class BlockFillMode extends MapMode implements MapViewPaintable {
         }finally{g.dispose();}
     }
     private Path2D.Double screen(List<BlockGeometry.Point> points,MapView mv){Path2D.Double p=new Path2D.Double();for(int i=0;i<points.size();i++){Point pixel=mv.getPoint(meters.inverse(points.get(i)));if(i==0)p.moveTo(pixel.x,pixel.y);else p.lineTo(pixel.x,pixel.y);}p.closePath();return p;}
+
+    // ── POI 生成 ────────────────────────────────────────────────────────────────
+    /**
+     * 对当前选中的闭合建筑 way 生成 POI 节点。
+     * 读取面板的场景选择、类型选择和数量，用 PoiPlacementGeometry 在建筑内部撒点，
+     * 用 PoiNameGenerator 生成名字和标签，AddCommand 批量写入。
+     */
+    void generatePoi() {
+        try {
+            DataSet ds = MainApplication.getLayerManager().getEditDataSet();
+            if (ds == null || !BlockFillPanel.hasEditableLayer()) {
+                throw new IllegalArgumentException("请先切换到可编辑的 OSM 数据图层。");
+            }
+
+            List<Way> buildings = ds.getSelectedWays().stream()
+                .filter(w -> w.isUsable() && w.isClosed() && w.hasKey("building") && w.getNodesCount() >= 4)
+                .toList();
+            if (buildings.isEmpty()) throw new IllegalArgumentException("请先选择至少一个带 building=* 的闭合建筑 way。");
+
+            Set<PoiNameGenerator.Scene> scenes = panel.poiScenes();
+            if (scenes.isEmpty()) throw new IllegalArgumentException("请至少勾选一个场景（老城区/城中村/街边/综合体）。");
+
+            List<String> types = panel.selectedPoiTypes();
+            if (types.isEmpty()) throw new IllegalArgumentException("请在类型列表中至少选择一个 POI 类型。");
+
+            int countPerType = panel.poiCountPerType();
+            long seed = panel.poiSeed();
+
+            // 以第一个选中建筑的第一个节点为投影原点
+            LatLon origin = buildings.get(0).getNodes().get(0).getCoor();
+            if (origin == null) throw new IllegalArgumentException("建筑包含未定位节点。");
+            LocalMeters m = new LocalMeters(origin.lat(), origin.lon());
+
+            PoiNameGenerator nameGen = new PoiNameGenerator(scenes, seed);
+
+            List<Command> commands = new ArrayList<>();
+            int totalPois = 0;
+
+            for (Way building : buildings) {
+                // 投影建筑环
+                List<PoiPlacementGeometry.Point> ring = new ArrayList<>();
+                for (Node node : building.getNodes()) {
+                    LatLon ll = node.getCoor();
+                    if (ll == null) throw new IllegalArgumentException("建筑包含未定位节点。");
+                    BlockGeometry.Point mp = m.project(ll);
+                    ring.add(new PoiPlacementGeometry.Point(mp.x(), mp.y()));
+                }
+                // 去掉闭合重复点
+                if (ring.size() > 1) {
+                    PoiPlacementGeometry.Point first = ring.get(0), last = ring.get(ring.size() - 1);
+                    if (Math.abs(first.x() - last.x()) < 1e-9 && Math.abs(first.y() - last.y()) < 1e-9)
+                        ring.remove(ring.size() - 1);
+                }
+
+                // 对每种选定类型生成 countPerType 个点
+                for (String type : types) {
+                    // 用建筑 id + type 哈希做种子，不同建筑不同分布
+                    long typeSeed = seed ^ (building.getUniqueId() * 31L) ^ type.hashCode();
+                    List<PoiPlacementGeometry.Point> pts =
+                        PoiPlacementGeometry.scatter(ring, countPerType, typeSeed);
+
+                    for (PoiPlacementGeometry.Point pt : pts) {
+                        LatLon ll = m.inverse(new BlockGeometry.Point(pt.x(), pt.y()));
+                        Map<String, String> tags = nameGen.generate(type, ll.lat(), ll.lon());
+                        if (tags.isEmpty()) continue;
+                        Node node = new Node(ll);
+                        node.setKeys(tags);
+                        commands.add(new AddCommand(ds, node));
+                        totalPois++;
+                    }
+                }
+            }
+
+            if (commands.isEmpty()) throw new IllegalStateException("无法在建筑内部生成 POI（空间不足或类型无匹配）。");
+
+            UndoRedoHandler.getInstance().add(new SequenceCommand("POI 生成：" + totalPois + " 个", commands));
+            panel.message("已生成 " + totalPois + " 个 POI；Ctrl+Z 一次撤销。");
+        } catch (RuntimeException ex) {
+            Logging.error(ex);
+            panel.message(ex.getMessage());
+        }
+    }
+
     @Override public String getModeHelpText(){return "街区填充：鼠标悬停预览地块，左键确认地块，Ctrl+Z 撤销。数字键 1—9 切换用地，Esc 退出工具。";}
 }

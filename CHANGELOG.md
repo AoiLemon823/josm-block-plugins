@@ -2,6 +2,12 @@
 
 All notable changes to the JOSM BlockFill and BlockLayout plugins.
 
+## [1.1.0]
+
+- BlockFill places fictional POIs inside selected buildings with scene, type, quantity and seed controls. One undo removes the batch.
+- BlockLayout previews and adds trees, garden areas and a pond inside selected parcels, with obstacle clearance and one-step undo.
+- The build scripts run POI and greenery regression tests and accept JAVA_HOME and JOSM_JAR overrides.
+
 ## [1.0.1] — 2026-11-16
 
 ### BlockFill (街区填充) 1.0.1

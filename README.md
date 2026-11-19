@@ -37,7 +37,11 @@ Both plugins are independent: they can be installed separately or together witho
 
 Land-use categories follow Chinese national classification codes (CN-2023 style). The optional OGF naming panel generates residential, commercial and business-office names from an editable vocabulary.
 
+In the POI tab, select one or more closed building ways, choose scenes and types, and generate fictional POIs for OGF. The quantity and seed are configurable, and one undo removes the batch.
+
 ### BlockLayout (Alt+Shift+B)
+
+The greenery tab previews trees, garden areas and a pond inside selected parcels. It accounts for existing buildings and nearby roads before applying the batch.
 
 1. Select one or more closed parcel ways (`landuse=residential` or similar).
 2. Open the *建筑排布* side panel.
@@ -72,7 +76,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\build.ps1
 powershell -NoProfile -ExecutionPolicy Bypass -File .\build-layout.ps1
 ```
 
-The build uses a bundled Zulu JDK 21 (in `tools/`). Output jars are placed in `dist/`.
+Set `JAVA_HOME` to a JDK 21 installation and `JOSM_JAR` to your JOSM jar if they are outside the default locations in the scripts. Output jars are placed in `dist/`.
 
 ## Project Structure
 

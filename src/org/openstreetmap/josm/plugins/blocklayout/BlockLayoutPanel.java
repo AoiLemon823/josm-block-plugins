@@ -49,6 +49,18 @@ public final class BlockLayoutPanel extends ToggleDialog {
     final JSpinner factoryMinWidth=number(12,5,100,1),factoryMaxWidth=number(24,5,150,1),factoryMinLength=number(30,10,200,1),factoryMaxLength=number(60,10,300,1),factoryFloorHeight=number(6,3,20,0.5),factoryMinLevels=number(1,1,12,1),factoryMaxLevels=number(2,1,12,1),factorySetback=number(8,0,100,1),factoryGap=number(8,0,100,1),factoryRowGap=number(15,0,100,1),factorySeed=number(42,0,1000000,1);
     final JSpinner factoryGroupSize=number(3,0,10,1);
     final JComboBox<String> chamfer=new JComboBox<>(new String[]{"30°端部倒角","45°端部倒角"});
+    // ── Greenery tab ──────────────────────────────────────────────────────
+    final JCheckBox greeneryMode=new JCheckBox("生成居住区绿化",false);
+    final JCheckBox greenTrees=new JCheckBox("散植乔木（Poisson盘采样）",true);
+    final JSpinner greenTreeSpacing=number(5.0,2.0,30.0,0.5);
+    final JCheckBox greenGardens=new JCheckBox("绿地草坪面",true);
+    final JSpinner greenMinPatchArea=number(20.0,1.0,2000.0,5.0);
+    final JCheckBox greenPool=new JCheckBox("景观水池",false);
+    final JSpinner greenPoolRadius=number(5.0,2.0,30.0,0.5);
+    final JSpinner greenBuildingClearance=number(3.0,0.0,20.0,0.5);
+    final JSpinner greenRoadClearance=number(2.0,0.0,20.0,0.5);
+    final JSpinner greenSeed=number(42,0,1000000,1);
+    // ── Street tree tab ───────────────────────────────────────────────────
     final JCheckBox streetTreeMode=new JCheckBox("生成行道树",false);
     final JComboBox<String> treeMode=new JComboBox<>(new String[]{"地块内service道路","选中道路"});
     final JSpinner treeSpacing=number(6.0,4.0,20.0,0.5),treeOffset=number(2.0,0,20.0,0.5);
@@ -81,7 +93,14 @@ public final class BlockLayoutPanel extends ToggleDialog {
         addRow(factories,row++,"厂房最小短边（米）",factoryMinWidth);addRow(factories,row++,"厂房最大短边（米）",factoryMaxWidth);addRow(factories,row++,"厂房最小长边（米）",factoryMinLength);addRow(factories,row++,"厂房最大长边（米）",factoryMaxLength);addRow(factories,row++,"标准层高（米）",factoryFloorHeight);addRow(factories,row++,"最少层数",factoryMinLevels);addRow(factories,row++,"最多层数",factoryMaxLevels);addRow(factories,row++,"地块退界（米）",factorySetback);addRow(factories,row++,"同排间隔（米）",factoryGap);addRow(factories,row++,"排间间隔（米）",factoryRowGap);addRow(factories,row++,"联排最大栋数（0关闭）",factoryGroupSize);addRow(factories,row++,"随机种子",factorySeed);
         JPanel trees=devMode?new JPanel(new GridBagLayout()):null;if(trees!=null){trees.setBorder(BorderFactory.createEmptyBorder(8,8,8,8));row=0;
         addFullRow(trees,row++,streetTreeMode);addRow(trees,row++,"生成模式",treeMode);addRow(trees,row++,"行道树间距（米）",treeSpacing);addRow(trees,row++,"距道路边偏移(米)",treeOffset);addFullRow(trees,row++,treeDoubleSide);}
-        tabs.addTab("住宅",housing);tabs.addTab("底商",shops);tabs.addTab("工业",factories);if(devMode&&trees!=null)tabs.addTab("行道树",trees);
+        JPanel greenery=new JPanel(new GridBagLayout());greenery.setBorder(BorderFactory.createEmptyBorder(8,8,8,8));row=0;
+        addFullRow(greenery,row++,greeneryMode);
+        addFullRow(greenery,row++,greenTrees);addRow(greenery,row++,"乔木最小间距（米）",greenTreeSpacing);
+        addFullRow(greenery,row++,greenGardens);addRow(greenery,row++,"绿地最小面积（㎡）",greenMinPatchArea);
+        addFullRow(greenery,row++,greenPool);addRow(greenery,row++,"水池近似半径（米）",greenPoolRadius);
+        addRow(greenery,row++,"建筑退绿距离（米）",greenBuildingClearance);addRow(greenery,row++,"道路退绿距离（米）",greenRoadClearance);
+        addRow(greenery,row++,"随机种子",greenSeed);
+        tabs.addTab("住宅",housing);tabs.addTab("底商",shops);tabs.addTab("工业",factories);tabs.addTab("绿化",greenery);if(devMode&&trees!=null)tabs.addTab("行道树",trees);
         JPanel direction=new JPanel(new GridBagLayout());direction.setBorder(BorderFactory.createEmptyBorder(6,8,6,8));row=0;addFullRow(direction,row++,pickEdge);addFullRow(direction,row++,resetEdge);addFullRow(direction,row++,directionStatus);addFullRow(direction,row++,selectionHint);
         JButton previewButton=new JButton("开始排布预览");previewButton.addActionListener(e->{try{if(mode!=null)mode.startPreview();}catch(RuntimeException ex){message(ex.getMessage());}});
         addFullRow(direction,row++,previewButton);
@@ -105,6 +124,9 @@ public final class BlockLayoutPanel extends ToggleDialog {
         factoryMode.addActionListener(e->{if(factoryMode.isSelected()){communityShops.setSelected(false);useSample.setSelected(false);tabs.setSelectedIndex(2);selectionHint.setText("选择工业用地闭合地块；厂房尺寸按范围随机变化，方向可用拾取地块边设置。");}settingsChanged();});
         communityShops.addActionListener(e->{if(communityShops.isSelected())tabs.setSelectedIndex(1);});
         factoryRoads.addActionListener(e->settingsChanged());
+        greeneryMode.addActionListener(e->{if(greeneryMode.isSelected()){communityShops.setSelected(false);useSample.setSelected(false);factoryMode.setSelected(false);tabs.setSelectedIndex(3);selectionHint.setText("选择闭合居住地块；插件将在建筑与道路之外生成绿化元素。");}settingsChanged();});
+        for(javax.swing.JSpinner sp:new javax.swing.JSpinner[]{greenTreeSpacing,greenMinPatchArea,greenPoolRadius,greenBuildingClearance,greenRoadClearance,greenSeed}){sp.addChangeListener(changed);sp.addMouseWheelListener(e->wheelAdjust(sp,e));sp.getEditor().addMouseWheelListener(e->wheelAdjust(sp,e));}
+        greenTrees.addActionListener(e->settingsChanged());greenGardens.addActionListener(e->settingsChanged());greenPool.addActionListener(e->settingsChanged());
         streetTreeMode.addActionListener(e->{if(streetTreeMode.isSelected()){communityShops.setSelected(false);useSample.setSelected(false);factoryMode.setSelected(false);tabs.setSelectedIndex(3);selectionHint.setText(treeMode.getSelectedIndex()==0?"选择闭合地块;插件将沿地块内service道路生成行道树。":"选择一条highway道路(非snservice);插件将沿道路生成行道树。");}settingsChanged();});
         treeMode.addActionListener(e->{if(streetTreeMode.isSelected()){selectionHint.setText(treeMode.getSelectedIndex()==0?"选择闭合地块，插件将沿地块内service道路生成行道树。":"选择一条非service的道路，插件将沿道路生成行道树。");}settingsChanged();});
         treeDoubleSide.addActionListener(e->settingsChanged());
@@ -222,6 +244,16 @@ public final class BlockLayoutPanel extends ToggleDialog {
     double shopHeight(){return value(shopHeight);}
     double chamferDegrees(){return chamfer.getSelectedIndex()==0?30:45;}
     boolean streetTreeMode(){return streetTreeMode.isSelected();}
+    boolean greeneryMode(){return greeneryMode.isSelected();}
+    boolean greenTrees(){return greenTrees.isSelected();}
+    double greenTreeSpacing(){return value(greenTreeSpacing);}
+    boolean greenGardens(){return greenGardens.isSelected();}
+    double greenMinPatchArea(){return value(greenMinPatchArea);}
+    boolean greenPool(){return greenPool.isSelected();}
+    double greenPoolRadius(){return value(greenPoolRadius);}
+    double greenBuildingClearance(){return value(greenBuildingClearance);}
+    double greenRoadClearance(){return value(greenRoadClearance);}
+    long greenSeed(){return Math.round(value(greenSeed));}
     boolean treeUseSelectedRoad(){return treeMode.getSelectedIndex()==1;}
     double treeSpacing(){return value(treeSpacing);}
     double treeOffset(){return value(treeOffset);}
