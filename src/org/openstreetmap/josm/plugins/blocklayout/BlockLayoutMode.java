@@ -48,6 +48,9 @@ public final class BlockLayoutMode extends MapMode implements MapViewPaintable {
     private List<LayoutGeometry.Footprint> factoryPreview=List.of();
     private List<Integer> factoryPreviewLevels=List.of();
     private List<LayoutGeometry.Point> treePreview=List.of();
+    private List<GreeneryGeometry.Ring> greeneryGardenPreview=List.of();
+    private GreeneryGeometry.Ring greeneryPoolPreview=null;
+    private List<LayoutGeometry.Point> greeneryTreePreview=List.of();
     private boolean active;
     private boolean ready;
     private boolean committing;
@@ -64,7 +67,7 @@ public final class BlockLayoutMode extends MapMode implements MapViewPaintable {
         this.panel=panel;
         Double savedAngle=panel.savedDirectionDegrees();if(savedAngle!=null)directionAngle=Math.toRadians(savedAngle);
         this.dataListener=new DataSetListenerAdapter(event -> {
-            if(active && !committing){ready=false;preview=null;footprintPreview=List.of();shopPreview=List.of();roadPreview=List.of();factoryPreview=List.of();factoryPreviewLevels=List.of();treePreview=List.of();previewGeometry=Map.of();panel.message("地图数据已变化，请重新开始预览。");repaintMap();}
+            if(active && !committing){ready=false;preview=null;footprintPreview=List.of();shopPreview=List.of();roadPreview=List.of();factoryPreview=List.of();factoryPreviewLevels=List.of();treePreview=List.of();greeneryGardenPreview=List.of();greeneryPoolPreview=null;greeneryTreePreview=List.of();previewGeometry=Map.of();panel.message("地图数据已变化，请重新开始预览。");repaintMap();}
         });
         putValue(SMALL_ICON, BlockLayoutIcons.icon());
         putValue(LARGE_ICON_KEY, BlockLayoutIcons.icon());
@@ -95,7 +98,7 @@ public final class BlockLayoutMode extends MapMode implements MapViewPaintable {
 
     /** Releases listeners without touching MainApplication.getMap(), which is already null while JOSM destroys the map frame. */
     void dispose() {
-        active=false; ready=false; preview=null;footprintPreview=List.of();shopPreview=List.of();roadPreview=List.of();factoryPreview=List.of();factoryPreviewLevels=List.of();treePreview=List.of(); projection=null;previewParcelIds=java.util.Set.of();previewGeometry=Map.of();
+        active=false; ready=false; preview=null;footprintPreview=List.of();shopPreview=List.of();roadPreview=List.of();factoryPreview=List.of();factoryPreviewLevels=List.of();treePreview=List.of();greeneryGardenPreview=List.of();greeneryPoolPreview=null;greeneryTreePreview=List.of(); projection=null;previewParcelIds=java.util.Set.of();previewGeometry=Map.of();
         if(data!=null){data.removeDataSetListener(dataListener);data=null;}
         KeyboardFocusManager.getCurrentKeyboardFocusManager().removeKeyEventDispatcher(keyDispatcher);
     }
@@ -146,7 +149,7 @@ public final class BlockLayoutMode extends MapMode implements MapViewPaintable {
                 LayoutGeometry.ShopResult result=LayoutGeometry.layoutShopPolygons(parcels,existing,roads,panel.shopSetback(),panel.shopDepth(),panel.shopHeight(),panel.chamferDegrees(),panel.shopRoadClearance());
                 shopPreview=result.polygons();footprintPreview=List.of();roadPreview=List.of();preview=null;previewKind=PreviewKind.SHOPS;capturePreview(selected);ready=true;
                 panel.message(result.message()+" 距边 "+panel.shopSetback()+"米，进深 "+panel.shopDepth()+"米，高 "+panel.shopHeight()+"米；道路和建筑占用部分已扣除。");
-            }else if(panel.useSample()){ 
+            }else if(panel.useSample()){
                 Way sample=sampleWays.get(0);
                 LayoutGeometry.Footprint footprint=new LayoutGeometry.Footprint(projectRing(sample));
                 List<LayoutGeometry.Footprint> existing=data.getWays().stream().filter(w->w.isUsable()&&w.isClosed()&&w.hasKey("building")&&w.getNodesCount()>=4&&!sampleWays.contains(w)&&nearProjectionOrigin(w,projectionOrigin)).map(w->new LayoutGeometry.Footprint(projectRing(w))).toList();
@@ -169,6 +172,15 @@ public final class BlockLayoutMode extends MapMode implements MapViewPaintable {
                     treePreview=result.trees();footprintPreview=List.of();shopPreview=List.of();roadPreview=List.of();factoryPreview=List.of();preview=null;previewKind=PreviewKind.STREET_TREES;capturePreview(selected);ready=true;
                     panel.message(result.message()+" 间距"+panel.treeSpacing()+"米,偏移"+panel.treeOffset()+"米。");
                 }
+            }else if(panel.greeneryMode()){
+                List<LayoutGeometry.Footprint> existingFp=data.getWays().stream().filter(w->w.isUsable()&&w.isClosed()&&w.hasKey("building")&&w.getNodesCount()>=4&&!parcelWays.contains(w)&&nearProjectionOrigin(w,projectionOrigin)).map(w->new LayoutGeometry.Footprint(projectRing(w))).toList();
+                List<LayoutGeometry.Road> nearRoads=data.getWays().stream().filter(w->w.isUsable()&&w.hasKey("highway")&&w.getNodesCount()>=2&&nearProjectionOrigin(w,projectionOrigin)).map(w->{double rw=4;try{String v=w.get("width");if(v!=null)rw=Double.parseDouble(v);}catch(NumberFormatException ignored){}return new LayoutGeometry.Road(w.getNodes().stream().map(n->projection.project(n.getCoor())).toList(),rw);}).toList();
+                GreeneryGeometry.Settings gs=new GreeneryGeometry.Settings(panel.greenTrees(),panel.greenTreeSpacing(),panel.greenGardens(),panel.greenMinPatchArea(),panel.greenPool(),panel.greenPoolRadius(),panel.greenBuildingClearance(),panel.greenRoadClearance(),panel.greenSeed());
+                GreeneryGeometry.Result gr=GreeneryGeometry.layout(parcels,existingFp,nearRoads,gs);
+                greeneryTreePreview=gr.trees();greeneryGardenPreview=gr.gardenRings();greeneryPoolPreview=gr.poolRing();
+                treePreview=List.of();footprintPreview=List.of();shopPreview=List.of();roadPreview=List.of();factoryPreview=List.of();factoryPreviewLevels=List.of();preview=null;
+                previewKind=PreviewKind.GREENERY;capturePreview(selected);ready=true;
+                panel.message(gr.message());
             }else if(directionAngle!=null){
                 LayoutGeometry.FootprintResult result=LayoutGeometry.layoutOriented(parcels,obstacles,settings.geometry(),directionAngle);
                 footprintPreview=result.buildings();shopPreview=List.of();roadPreview=List.of();preview=null;previewKind=PreviewKind.ORIENTED;capturePreview(selected);ready=true;
@@ -180,7 +192,7 @@ public final class BlockLayoutMode extends MapMode implements MapViewPaintable {
             }
             repaintMap();
         } catch (RuntimeException ex) {
-            ready=false;preview=null;footprintPreview=List.of();shopPreview=List.of();roadPreview=List.of();projection=null;panel.message(ex.getMessage());repaintMap();
+            ready=false;preview=null;footprintPreview=List.of();shopPreview=List.of();roadPreview=List.of();greeneryGardenPreview=List.of();greeneryPoolPreview=null;greeneryTreePreview=List.of();projection=null;panel.message(ex.getMessage());repaintMap();
         }
     }
 
@@ -242,13 +254,25 @@ public final class BlockLayoutMode extends MapMode implements MapViewPaintable {
     }
     private void capturePreview(List<Way> ways){previewParcelIds=ways.stream().map(Way::getUniqueId).collect(java.util.stream.Collectors.toUnmodifiableSet());previewGeometry=captureGeometry(ways);}
     private static Map<Long,String> captureGeometry(java.util.Collection<Way> ways){Map<Long,String> snapshot=new LinkedHashMap<>();for(Way way:ways){StringBuilder b=new StringBuilder();for(Node node:way.getNodes())b.append(node.getUniqueId()).append('@').append(node.getCoor()).append(';');snapshot.put(way.getUniqueId(),b.toString());}return Map.copyOf(snapshot);}
-    void settingsChanged(){if(active){ready=false;preview=null;footprintPreview=List.of();shopPreview=List.of();roadPreview=List.of();factoryPreview=List.of();factoryPreviewLevels=List.of();treePreview=List.of();panel.message("参数已变化，请重新开始预览。");repaintMap();}}
+    void settingsChanged(){if(active){ready=false;preview=null;footprintPreview=List.of();shopPreview=List.of();roadPreview=List.of();factoryPreview=List.of();factoryPreviewLevels=List.of();treePreview=List.of();greeneryGardenPreview=List.of();greeneryPoolPreview=null;greeneryTreePreview=List.of();panel.message("参数已变化，请重新开始预览。");repaintMap();}}
 
     private void createBuildings() {
         try {
             if(data==null || data!=MainApplication.getLayerManager().getEditDataSet())throw new IllegalStateException("当前可编辑图层已变化，请重新预览。");
             java.util.Set<Long> currentIds=data.getSelectedWays().stream().map(Way::getUniqueId).collect(java.util.stream.Collectors.toSet());
             if(!currentIds.equals(previewParcelIds)||!captureGeometry(data.getSelectedWays()).equals(previewGeometry))throw new IllegalStateException("地块选择或边界几何已变化，请重新预览。");
+            if(previewKind==PreviewKind.GREENERY){
+                List<Command> commands=new ArrayList<>();Map<String,Node> generatedNodes=new LinkedHashMap<>();
+                for(LayoutGeometry.Point pt:greeneryTreePreview){Node n=new Node(projection.inverse(pt));n.put("natural","tree");commands.add(new AddCommand(data,n));}
+                for(GreeneryGeometry.Ring ring:greeneryGardenPreview){Way w=addClosedRing(ring.points(),projection::inverse,data,commands,generatedNodes);w.put("leisure","garden");commands.add(new AddCommand(data,w));}
+                if(greeneryPoolPreview!=null){Way w=addClosedRing(greeneryPoolPreview.points(),projection::inverse,data,commands,generatedNodes);w.put("natural","water");commands.add(new AddCommand(data,w));}
+                int total=greeneryTreePreview.size()+greeneryGardenPreview.size()+(greeneryPoolPreview!=null?1:0);
+                committing=true;
+                try{UndoRedoHandler.getInstance().add(new SequenceCommand("绿化生成："+total+"个元素",commands));}finally{committing=false;}
+                panel.message("已生成绿化元素 "+total+" 个；Ctrl+Z 一次撤销。");
+                ready=false;preview=null;footprintPreview=List.of();shopPreview=List.of();roadPreview=List.of();factoryPreview=List.of();factoryPreviewLevels=List.of();treePreview=List.of();greeneryGardenPreview=List.of();greeneryPoolPreview=null;greeneryTreePreview=List.of();previewParcelIds=java.util.Set.of();previewGeometry=Map.of();repaintMap();
+                return;
+            }
             if(previewKind==PreviewKind.STREET_TREES){
                 List<Command> commands=new ArrayList<>();
                 for(LayoutGeometry.Point point:treePreview){Node node=new Node(projection.inverse(point));node.put("natural","tree");commands.add(new AddCommand(data,node));}
@@ -257,7 +281,7 @@ public final class BlockLayoutMode extends MapMode implements MapViewPaintable {
                 try { UndoRedoHandler.getInstance().add(new SequenceCommand("行道树："+treeCount+"棵",commands)); }
                 finally { committing=false; }
                 panel.message("已生成 "+treeCount+" 棵行道树；Ctrl+Z 可一次撤销。");
-                ready=false;preview=null;footprintPreview=List.of();shopPreview=List.of();roadPreview=List.of();factoryPreview=List.of();factoryPreviewLevels=List.of();treePreview=List.of();previewParcelIds=java.util.Set.of();previewGeometry=Map.of();repaintMap();
+                ready=false;preview=null;footprintPreview=List.of();shopPreview=List.of();roadPreview=List.of();factoryPreview=List.of();factoryPreviewLevels=List.of();treePreview=List.of();greeneryGardenPreview=List.of();greeneryPoolPreview=null;greeneryTreePreview=List.of();previewParcelIds=java.util.Set.of();previewGeometry=Map.of();repaintMap();
                 return;
             }
             LayoutSettings settings=panel.settings();
@@ -271,7 +295,7 @@ public final class BlockLayoutMode extends MapMode implements MapViewPaintable {
             try { UndoRedoHandler.getInstance().add(new SequenceCommand((previewKind==PreviewKind.FACTORIES?"工业厂房：":previewKind==PreviewKind.SHOPS?"社区底商：":"住宅楼排布：")+buildingCount+("栋/段"),commands)); }
             finally { committing=false; }
             panel.message("已生成 "+buildingCount+(previewKind==PreviewKind.FACTORIES?" 栋工业厂房"+(roadPreview.isEmpty()?"":"及 "+roadPreview.size()+" 条 service 通道"):previewKind==PreviewKind.SHOPS?" 段底商":" 栋住宅楼")+"；Ctrl+Z 可一次撤销。");
-            ready=false;preview=null;footprintPreview=List.of();shopPreview=List.of();roadPreview=List.of();factoryPreview=List.of();factoryPreviewLevels=List.of();previewParcelIds=java.util.Set.of();previewGeometry=Map.of();repaintMap();
+            ready=false;preview=null;footprintPreview=List.of();shopPreview=List.of();roadPreview=List.of();factoryPreview=List.of();factoryPreviewLevels=List.of();greeneryGardenPreview=List.of();greeneryPoolPreview=null;greeneryTreePreview=List.of();previewParcelIds=java.util.Set.of();previewGeometry=Map.of();repaintMap();
         } catch (RuntimeException ex) { Logging.error(ex);panel.message("创建失败："+ex.getMessage()); }
     }
 
@@ -341,6 +365,25 @@ public final class BlockLayoutMode extends MapMode implements MapViewPaintable {
                 for(LayoutGeometry.Point point:treePreview){Point p=mapView.getPoint(projection.inverse(point));g.fillOval(p.x-4,p.y-4,8,8);}
                 return;
             }
+            if(previewKind==PreviewKind.GREENERY){
+                // Trees
+                g.setColor(new Color(34,139,34,220));
+                for(LayoutGeometry.Point pt:greeneryTreePreview){Point p=mapView.getPoint(projection.inverse(pt));g.fillOval(p.x-4,p.y-4,8,8);}
+                // Garden patches
+                g.setStroke(new BasicStroke(1.5f));
+                for(GreeneryGeometry.Ring ring:greeneryGardenPreview){
+                    Path2D.Double path=new Path2D.Double();
+                    for(int i=0;i<ring.points().size();i++){Point p=mapView.getPoint(projection.inverse(ring.points().get(i)));if(i==0)path.moveTo(p.x,p.y);else path.lineTo(p.x,p.y);}path.closePath();
+                    g.setColor(new Color(60,160,60,55));g.fill(path);g.setColor(new Color(30,120,30,200));g.draw(path);
+                }
+                // Pool
+                if(greeneryPoolPreview!=null){
+                    Path2D.Double path=new Path2D.Double();
+                    for(int i=0;i<greeneryPoolPreview.points().size();i++){Point p=mapView.getPoint(projection.inverse(greeneryPoolPreview.points().get(i)));if(i==0)path.moveTo(p.x,p.y);else path.lineTo(p.x,p.y);}path.closePath();
+                    g.setColor(new Color(64,164,223,80));g.fill(path);g.setColor(new Color(30,100,180,220));g.setStroke(new BasicStroke(2.0f));g.draw(path);
+                }
+                return;
+            }
             List<List<LayoutGeometry.Point>> outlines=preview!=null?preview.buildings().stream().map(LayoutGeometry.Rect::corners).toList():(previewKind==PreviewKind.FACTORIES?factoryPreview:footprintPreview).stream().map(LayoutGeometry.Footprint::ring).toList();
             if(previewKind==PreviewKind.SHOPS){for(LayoutGeometry.ShopPolygon polygon:shopPreview){paintRing(g,mapView,polygon.outer());for(List<LayoutGeometry.Point> hole:polygon.holes())paintRing(g,mapView,hole);}}
                         if(previewKind==PreviewKind.SHOPS)return;
@@ -354,7 +397,7 @@ public final class BlockLayoutMode extends MapMode implements MapViewPaintable {
     }
 
     private void paintRing(Graphics2D g,MapView mapView,List<LayoutGeometry.Point> points){Path2D.Double p=new Path2D.Double();for(int i=0;i<points.size();i++){Point q=mapView.getPoint(projection.inverse(points.get(i)));if(i==0)p.moveTo(q.x,q.y);else p.lineTo(q.x,q.y);}p.closePath();g.setColor(new Color(70,130,210,45));g.fill(p);g.setColor(new Color(30,90,170,210));g.draw(p);}
-    private enum PreviewKind { RECTANGLE, SAMPLE, ORIENTED, SHOPS, FACTORIES, STREET_TREES }
+    private enum PreviewKind { RECTANGLE, SAMPLE, ORIENTED, SHOPS, FACTORIES, STREET_TREES, GREENERY }
     private static final class LocalProjection {
         private static final double R=6371008.8;
         private final double lat0,lon0,cos;

@@ -21,7 +21,7 @@ public final class LayoutUiStartupTest {
             if(mode.getShortcut()==null)throw new AssertionError("Missing map mode shortcut");
             LayoutSettings settings=panel.settings();settings.validate();
             if(!containsScrollPane(panel))throw new AssertionError("Settings content should scroll");
-            if(panel.tabs.getTabCount()!=3||!"住宅".equals(panel.tabs.getTitleAt(0))||!"底商".equals(panel.tabs.getTitleAt(1))||!"工业".equals(panel.tabs.getTitleAt(2)))throw new AssertionError("Settings should be organized into housing, shop and industrial tabs");
+            if(panel.tabs.getTabCount()!=4||!"住宅".equals(panel.tabs.getTitleAt(0))||!"底商".equals(panel.tabs.getTitleAt(1))||!"工业".equals(panel.tabs.getTitleAt(2))||!"绿化".equals(panel.tabs.getTitleAt(3)))throw new AssertionError("Settings should be organized into housing, shop, industrial and greenery tabs");
             if(!"apartments".equals(settings.buildingTag()))throw new AssertionError("Default building tag");
             if(panel.sunSpacing.isSelected() || panel.staggered.isSelected())throw new AssertionError("Optional layout toggles should default off");
             panel.preset.setSelectedItem("中高层住宅");
